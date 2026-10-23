@@ -1,0 +1,6 @@
+MASK1 ink animation asset: app/src/main/res/drawable-nodpi/catalog_ink_mask.png
+Source: https://github.com/robin-dela/css-mask-animation
+Asset: https://raw.githubusercontent.com/robin-dela/css-mask-animation/master/img/nature-sprite.png
+Author: Robin Delaporte / Codrops, Transition Effect with CSS Masks.
+License notice from upstream README: Integrate or build upon it for free in your personal or commercial projects. Don't republish, redistribute or sell "as-is".
+This app integrates the asset with a native Compose button animation.

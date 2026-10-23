@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "1051019276302",
+    "project_id": "mahagarage",
+    "storage_bucket": "mahagarage.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1051019276302:android:3f4b9c6f0c559c754b4c5f",
+        "android_client_info": {
+          "package_name": "com.mahaman.myapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1051019276302-vfoc6q2qs04aoe9lgpjnlffhqsv2ni2v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAwdUh-XGFcaKKl3le4IpJF7r8rT1OTy1s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1051019276302-vfoc6q2qs04aoe9lgpjnlffhqsv2ni2v.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1051019276302:android:3f4b9c6f0c559c754b4c5f",
+        "android_client_info": {
+          "package_name": "maha.garage"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1051019276302-vfoc6q2qs04aoe9lgpjnlffhqsv2ni2v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAwdUh-XGFcaKKl3le4IpJF7r8rT1OTy1s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1051019276302-vfoc6q2qs04aoe9lgpjnlffhqsv2ni2v.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

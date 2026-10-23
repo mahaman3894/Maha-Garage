@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <include domain="database" path="maha_garage.db" />
+    <include domain="sharedpref" path="." />
+    <include domain="file" path="receipts/" />
+    <include domain="file" path="vehicle_images/" />
+    <include domain="file" path="restored_photos/" />
+</full-backup-content>
