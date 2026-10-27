@@ -1,5 +1,8 @@
 package maha.garage.ui.vehicle
 
+import maha.garage.ui.tutorial.*
+
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -83,6 +86,7 @@ fun ConsumableActionDialog(
     var conditionValue by remember { mutableStateOf("") }
     var partsCost by remember { mutableStateOf("") }
     var laborCost by remember { mutableStateOf("") }
+    var showGuideDialog by remember { mutableStateOf(false) }
 
     var saving by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
@@ -121,10 +125,19 @@ fun ConsumableActionDialog(
     val settingsError = runCatching { require(relevantEvals.isNotEmpty()); settings() }.exceptionOrNull()?.message
     val isTab1Valid = intervalKmError == null && intervalMonthsError == null && baselineDateError == null && baselineMileageError == null && settingsError == null
     val serviceError = runCatching {
-        MaintenanceInputPolicy.validateService(serviceDate, serviceMileage,
-            when { isEngineOil -> listOf(engineOilCost); isBrakePad -> listOf(brakePadCost); else -> listOf(partsCost, laborCost) })
-        require(!isEngineOil || replaceEngineOil || replaceOilFilter) { "교환할 항목을 선택해 주세요." }
-        if (isBrakePad && padThicknessMm.isNotBlank()) require(padThicknessMm.toDoubleOrNull()?.let { it.isFinite() && it in 0.0..50.0 } == true) { "패드 두께를 확인해 주세요." }
+        val costList = when {
+            isEngineOil && actionType == ActionType.REPLACE -> listOf(engineOilCost.ifBlank { "0" })
+            isBrakePad && actionType == ActionType.REPLACE -> listOf(brakePadCost.ifBlank { "0" })
+            actionType == ActionType.INSPECT -> listOf(partsCost.ifBlank { "0" })
+            else -> listOf(partsCost.ifBlank { "0" }, laborCost.ifBlank { "0" })
+        }
+        MaintenanceInputPolicy.validateService(serviceDate, serviceMileage, costList)
+        if (isEngineOil && actionType == ActionType.REPLACE) {
+            require(replaceEngineOil || replaceOilFilter) { "교환할 항목을 선택해 주세요." }
+        }
+        if (isBrakePad && padThicknessMm.isNotBlank()) {
+            require(padThicknessMm.toDoubleOrNull()?.let { it.isFinite() && it in 0.0..50.0 } == true) { "패드 두께를 확인해 주세요." }
+        }
     }.exceptionOrNull()?.message
 
     AlertDialog(
@@ -146,9 +159,43 @@ fun ConsumableActionDialog(
                         },
                         style = MaterialTheme.typography.titleLarge,
                         color = TextPrimaryDark,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
-                    currentEval?.status?.let { StatusBadge(status = it) }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = GarageAccent.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, GarageAccent.copy(alpha = 0.4f)),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { showGuideDialog = true }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "소모품교환정보",
+                                    tint = GarageAccent,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "소모품교환정보",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = GarageAccent
+                                )
+                            }
+                        }
+                        currentEval?.status?.let { StatusBadge(status = it) }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -188,88 +235,199 @@ fun ConsumableActionDialog(
                 if (selectedTab == 0) {
                     // TAB 0: 정비 및 교체 기록 입력
 
-                    // 1. 엔진오일 특화 섹션
-                    if (isEngineOil) {
-                        Surface(
-                            color = SurfaceVariantDark,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text("교체 대상 선택", style = MaterialTheme.typography.labelSmall, color = TextSecondaryDark)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Checkbox(
-                                            checked = replaceEngineOil,
-                                            onCheckedChange = { replaceEngineOil = it },
-                                            colors = CheckboxDefaults.colors(checkedColor = GaragePrimaryLight)
+                    // 작업 유형 선택 (교체, 점검, 보충/교환, 정비)
+                    val actionOptions = listOf(
+                        ActionType.REPLACE to "교체",
+                        ActionType.INSPECT to "점검",
+                        ActionType.REFILL to "보충/교환",
+                        ActionType.CLEAN to "정비"
+                    )
+                    Surface(
+                        color = SurfaceVariantDark,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("작업 유형 선택", style = MaterialTheme.typography.labelSmall, color = TextSecondaryDark)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                actionOptions.forEach { (type, label) ->
+                                    val isSel = actionType == type
+                                    Surface(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { actionType = type },
+                                        color = if (isSel) GaragePrimaryLight.copy(alpha = 0.25f) else SurfaceDark,
+                                        border = BorderStroke(
+                                            1.dp,
+                                            if (isSel) GaragePrimaryLight else BorderDark
                                         )
-                                        Text("엔진오일 교체", color = TextPrimaryDark, style = MaterialTheme.typography.bodyMedium)
-                                    }
-
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Checkbox(
-                                            checked = replaceOilFilter,
-                                            onCheckedChange = { replaceOilFilter = it },
-                                            colors = CheckboxDefaults.colors(checkedColor = GaragePrimaryLight)
+                                    ) {
+                                        Text(
+                                            text = label,
+                                            modifier = Modifier.padding(vertical = 8.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSel) GaragePrimaryLight else TextSecondaryDark,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                         )
-                                        Text("오일필터 교체", color = TextPrimaryDark, style = MaterialTheme.typography.bodyMedium)
                                     }
                                 }
                             }
                         }
+                    }
 
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // 1. 엔진오일 특화 섹션
+                    if (isEngineOil) {
+                        if (actionType == ActionType.REPLACE) {
+                            Surface(
+                                color = SurfaceVariantDark,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text("교체 대상 선택", style = MaterialTheme.typography.labelSmall, color = TextSecondaryDark)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Checkbox(
+                                                checked = replaceEngineOil,
+                                                onCheckedChange = { replaceEngineOil = it },
+                                                colors = CheckboxDefaults.colors(checkedColor = GaragePrimaryLight)
+                                            )
+                                            Text("엔진오일 교체", color = TextPrimaryDark, style = MaterialTheme.typography.bodyMedium)
+                                        }
+
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Checkbox(
+                                                checked = replaceOilFilter,
+                                                onCheckedChange = { replaceOilFilter = it },
+                                                colors = CheckboxDefaults.colors(checkedColor = GaragePrimaryLight)
+                                            )
+                                            Text("오일필터 교체", color = TextPrimaryDark, style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                    }
+                                }
+                            }
+
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = oilBrand,
+                                    onValueChange = { oilBrand = it },
+                                    label = { Text("제조사/브랜드") },
+                                    placeholder = { Text("모빌1, 킥스, 지크") },
+                                    modifier = Modifier.weight(1f).tutorialTarget("consumable.form"),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = oilProductName,
+                                    onValueChange = { oilProductName = it },
+                                    label = { Text("제품명") },
+                                    placeholder = { Text("ESP, TOP") },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true
+                                )
+                            }
+
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = oilViscosity,
+                                    onValueChange = { oilViscosity = it },
+                                    label = { Text("오일 점도") },
+                                    placeholder = { Text("0W-20, 5W-30") },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = oilCapacityL,
+                                    onValueChange = { oilCapacityL = it },
+                                    label = { Text("교체량 (L)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true
+                                )
+                            }
+
                             OutlinedTextField(
-                                value = oilBrand,
-                                onValueChange = { oilBrand = it },
-                                label = { Text("제조사/브랜드") },
-                                placeholder = { Text("모빌1, 킥스, 지크") },
-                                modifier = Modifier.weight(1f),
+                                value = engineOilCost,
+                                onValueChange = { if (it.all { c -> c.isDigit() }) engineOilCost = it },
+                                label = { Text("교체 총 비용 (KRW)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
+                        } else {
+                            Surface(
+                                color = SurfaceVariantDark,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = when (actionType) {
+                                            ActionType.INSPECT -> "엔진오일 점검 안내"
+                                            ActionType.REFILL -> "엔진오일 보충 안내"
+                                            else -> "엔진오일 정비 안내"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = GarageAccent
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = when (actionType) {
+                                            ActionType.INSPECT -> "오일 레벨 게이지 실측, 슬러지 유무 및 오염도를 점검합니다. 점검 기록 시 소모품 상태가 '교체 권장(옐로우)'으로 갱신됩니다."
+                                            ActionType.REFILL -> "엔진오일 소모 차량의 보충 이력을 기록합니다. 보충 시 옐로우 상태로 전환됩니다."
+                                            else -> "오일팬 누유 가스켓, 드레인 플러그, 플러싱 등의 정비 이력을 기록합니다."
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextSecondaryDark
+                                    )
+                                }
+                            }
+
                             OutlinedTextField(
-                                value = oilProductName,
-                                onValueChange = { oilProductName = it },
-                                label = { Text("제품명") },
-                                placeholder = { Text("ESP, TOP") },
-                                modifier = Modifier.weight(1f),
+                                value = partSpecification,
+                                onValueChange = { partSpecification = it },
+                                label = {
+                                    Text(
+                                        when (actionType) {
+                                            ActionType.INSPECT -> "오일 상태 / 점검 소견"
+                                            ActionType.REFILL -> "보충 오일 규격 / 제품명"
+                                            else -> "정비 작업 내용"
+                                        }
+                                    )
+                                },
+                                placeholder = {
+                                    Text(
+                                        when (actionType) {
+                                            ActionType.INSPECT -> "예: 오일 레벨 정상(F-L 중간), 투명도 보통"
+                                            ActionType.REFILL -> "예: 0W-20 합성유 1L 보충"
+                                            else -> "예: 오일팬 가스켓 정비, 플러싱"
+                                        }
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+
+                            OutlinedTextField(
+                                value = engineOilCost,
+                                onValueChange = { if (it.all { c -> c.isDigit() }) engineOilCost = it },
+                                label = { Text("${actionType.displayName} 비용 (KRW, 무료 시 0 또는 공란)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
                         }
-
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = oilViscosity,
-                                onValueChange = { oilViscosity = it },
-                                label = { Text("오일 점도") },
-                                placeholder = { Text("0W-20, 5W-30") },
-                                modifier = Modifier.weight(1f),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = oilCapacityL,
-                                onValueChange = { oilCapacityL = it },
-                                label = { Text("교체량 (L)") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                modifier = Modifier.weight(1f),
-                                singleLine = true
-                            )
-                        }
-
-                        OutlinedTextField(
-                            value = engineOilCost,
-                            onValueChange = { if (it.all { c -> c.isDigit() }) engineOilCost = it },
-                            label = { Text("교체 총 비용 (KRW)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
                     }
 
                     // 2. 브레이크 패드 특화 섹션
@@ -280,13 +438,13 @@ fun ConsumableActionDialog(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
-                                Text("교체 위치 선택", style = MaterialTheme.typography.labelSmall, color = TextSecondaryDark)
+                                Text("작업 위치 선택", style = MaterialTheme.typography.labelSmall, color = TextSecondaryDark)
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 val positions = listOf(
-                                    "FRONT" to "전륜 교체",
-                                    "REAR" to "후륜 교체",
-                                    "BOTH" to "전·후륜 모두 교체"
+                                    "FRONT" to "전륜",
+                                    "REAR" to "후륜",
+                                    "BOTH" to "전·후륜 모두"
                                 )
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -300,7 +458,7 @@ fun ConsumableActionDialog(
                                                 .clip(RoundedCornerShape(8.dp))
                                                 .clickable { brakePadPosition = pos },
                                             color = if (isSel) GaragePrimaryLight.copy(alpha = 0.25f) else SurfaceDark,
-                                            border = androidx.compose.foundation.BorderStroke(
+                                            border = BorderStroke(
                                                 1.dp,
                                                 if (isSel) GaragePrimaryLight else BorderDark
                                             )
@@ -319,12 +477,35 @@ fun ConsumableActionDialog(
                             }
                         }
 
+                        if (actionType != ActionType.REPLACE) {
+                            Surface(
+                                color = SurfaceVariantDark,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text(
+                                        text = "${actionType.displayName} 안내",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = GarageAccent
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "캘리퍼 패드 잔여 두께(mm)를 실측하여 기록하면 마모도 기반 과학적 교체 주기가 적용되며 옐로우 상태로 전환됩니다.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextSecondaryDark
+                                    )
+                                }
+                            }
+                        }
+
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
                                 value = brakePadProduct,
                                 onValueChange = { brakePadProduct = it },
-                                label = { Text("패드 제품/제조사") },
-                                placeholder = { Text("상신 하드론, 브렘보") },
+                                label = { Text(if (actionType == ActionType.REPLACE) "패드 제품/제조사" else "점검 소견 / 제품") },
+                                placeholder = { Text(if (actionType == ActionType.REPLACE) "상신 하드론, 브렘보" else "편마모 없음, 디스크 양호") },
                                 modifier = Modifier.weight(1.2f),
                                 singleLine = true
                             )
@@ -332,6 +513,7 @@ fun ConsumableActionDialog(
                                 value = padThicknessMm,
                                 onValueChange = { padThicknessMm = it },
                                 label = { Text("잔여 두께 (mm)") },
+                                placeholder = { Text("예: 4.0") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 modifier = Modifier.weight(0.8f),
                                 singleLine = true
@@ -341,7 +523,7 @@ fun ConsumableActionDialog(
                         OutlinedTextField(
                             value = brakePadCost,
                             onValueChange = { if (it.all { c -> c.isDigit() }) brakePadCost = it },
-                            label = { Text("총 교체 비용 (KRW)") },
+                            label = { Text("${actionType.displayName} 비용 (KRW, 무료 시 0 또는 공란)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true
@@ -350,28 +532,24 @@ fun ConsumableActionDialog(
 
                     // 3. 일반 소모품
                     else {
-                        val actionOptions = listOf(
-                            ActionType.REPLACE to "교체",
-                            ActionType.INSPECT to "점검",
-                            ActionType.REFILL to "보충/교환",
-                            ActionType.CLEAN to "세척"
-                        )
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            actionOptions.forEach { (type, label) ->
-                                val isSel = actionType == type
-                                Surface(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable { actionType = type },
-                                    color = if (isSel) GaragePrimaryLight.copy(alpha = 0.25f) else SurfaceVariantDark
-                                ) {
+                        if (actionType != ActionType.REPLACE) {
+                            Surface(
+                                color = SurfaceVariantDark,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
                                     Text(
-                                        text = label,
-                                        modifier = Modifier.padding(vertical = 8.dp),
+                                        text = "${actionType.displayName} 기록 안내",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = if (isSel) GaragePrimaryLight else TextSecondaryDark,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        fontWeight = FontWeight.Bold,
+                                        color = GarageAccent
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "해당 부품의 ${actionType.displayName} 이력을 저장하면 관리 상태가 안전하게 '교체 권장(옐로우)'으로 갱신됩니다.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextSecondaryDark
                                     )
                                 }
                             }
@@ -380,7 +558,17 @@ fun ConsumableActionDialog(
                         OutlinedTextField(
                             value = partSpecification,
                             onValueChange = { partSpecification = it },
-                            label = { Text("사용 부품 규격 / 제품명") },
+                            label = {
+                                Text(
+                                    when (actionType) {
+                                        ActionType.REPLACE -> "사용 부품 규격 / 제품명"
+                                        ActionType.INSPECT -> "점검 내용 / 실측치"
+                                        ActionType.REFILL -> "보충 제품 규격 / 수량"
+                                        ActionType.CLEAN -> "정비 / 세척 작업 내용"
+                                        else -> "부품 규격 / 작업 내용"
+                                    }
+                                )
+                            },
                             placeholder = { Text("예: 순정 규격품, 보쉬, 델코") },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true
@@ -390,7 +578,7 @@ fun ConsumableActionDialog(
                             OutlinedTextField(
                                 value = partsCost,
                                 onValueChange = { if (it.all { c -> c.isDigit() }) partsCost = it },
-                                label = { Text("부품비 (원)") },
+                                label = { Text(if (actionType == ActionType.INSPECT) "점검/부품비 (원)" else "부품비 (원)") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.weight(1f),
                                 singleLine = true
@@ -633,7 +821,7 @@ fun ConsumableActionDialog(
                     val done: () -> Unit = { saving = false; onDismiss() }
                     val failed: (String) -> Unit = { saving = false; saveError = it }
                     if (selectedTab == 0) {
-                        // 정비 기록 저장
+                        // 정비/점검/교체 기록 저장
                         val visitId = UUID.randomUUID().toString()
                         val odo = requireNotNull(serviceMileage.toIntOrNull())
                         val lines = mutableListOf<ServiceLineEntity>()
@@ -643,32 +831,47 @@ fun ConsumableActionDialog(
                             val spec = listOfNotNull(
                                 oilBrand.ifBlank { null },
                                 oilProductName.ifBlank { null },
-                                oilViscosity.ifBlank { null },
-                                if (oilCapacityL.isNotBlank()) "${oilCapacityL}L" else null
-                            ).joinToString(" ")
+                                if (actionType == ActionType.REPLACE) oilViscosity.ifBlank { null } else null,
+                                if (actionType == ActionType.REPLACE && oilCapacityL.isNotBlank()) "${oilCapacityL}L" else if (actionType == ActionType.REFILL && oilCapacityL.isNotBlank()) "보충 ${oilCapacityL}L" else null
+                            ).joinToString(" ").ifBlank { null }
 
-                            if (replaceEngineOil) {
+                            if (actionType == ActionType.REPLACE) {
+                                if (replaceEngineOil) {
+                                    lines.add(
+                                        ServiceLineEntity(
+                                            visitId = visitId,
+                                            itemCode = "ENGINE_OIL",
+                                            actionType = ActionType.REPLACE,
+                                            partsCost = if (replaceOilFilter) totalCostLong * 4 / 5 else totalCostLong,
+                                            laborCost = 0L,
+                                            partSpecification = spec,
+                                            notes = notes.ifBlank { null }
+                                        )
+                                    )
+                                }
+                                if (replaceOilFilter) {
+                                    lines.add(
+                                        ServiceLineEntity(
+                                            visitId = visitId,
+                                            itemCode = "OIL_FILTER",
+                                            actionType = ActionType.REPLACE,
+                                            partsCost = if (replaceEngineOil) totalCostLong - totalCostLong * 4 / 5 else totalCostLong,
+                                            laborCost = 0L,
+                                            partSpecification = "오일필터 카트리지",
+                                            notes = notes.ifBlank { null }
+                                        )
+                                    )
+                                }
+                            } else {
                                 lines.add(
                                     ServiceLineEntity(
                                         visitId = visitId,
                                         itemCode = "ENGINE_OIL",
-                                        actionType = ActionType.REPLACE,
-                                        partsCost = if (replaceOilFilter) totalCostLong * 4 / 5 else totalCostLong,
+                                        actionType = actionType,
+                                        partsCost = totalCostLong,
                                         laborCost = 0L,
-                                        partSpecification = spec.ifBlank { null },
-                                        notes = notes.ifBlank { null }
-                                    )
-                                )
-                            }
-                            if (replaceOilFilter) {
-                                lines.add(
-                                    ServiceLineEntity(
-                                        visitId = visitId,
-                                        itemCode = "OIL_FILTER",
-                                        actionType = ActionType.REPLACE,
-                                        partsCost = if (replaceEngineOil) totalCostLong - totalCostLong * 4 / 5 else totalCostLong,
-                                        laborCost = 0L,
-                                        partSpecification = "오일필터 카트리지",
+                                        partSpecification = spec ?: partSpecification.ifBlank { null },
+                                        conditionValue = conditionValue.ifBlank { null },
                                         notes = notes.ifBlank { null }
                                     )
                                 )
@@ -683,7 +886,7 @@ fun ConsumableActionDialog(
                                     ServiceLineEntity(
                                         visitId = visitId,
                                         itemCode = "BRAKE_PAD_FRONT",
-                                        actionType = ActionType.REPLACE,
+                                        actionType = actionType,
                                         partsCost = if (brakePadPosition == "BOTH") costLong / 2 else costLong,
                                         laborCost = 0L,
                                         partSpecification = spec,
@@ -697,7 +900,7 @@ fun ConsumableActionDialog(
                                     ServiceLineEntity(
                                         visitId = visitId,
                                         itemCode = "BRAKE_PAD_REAR",
-                                        actionType = ActionType.REPLACE,
+                                        actionType = actionType,
                                         partsCost = if (brakePadPosition == "BOTH") costLong - costLong / 2 else costLong,
                                         laborCost = 0L,
                                         partSpecification = spec,
@@ -742,7 +945,7 @@ fun ConsumableActionDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = GaragePrimaryLight)
             ) {
                 Text(
-                    text = if (saving) "저장 중…" else if (selectedTab == 0) "정비 기록 저장" else "설정 저장",
+                    text = if (saving) "저장 중…" else if (selectedTab == 0) "${actionType.displayName} 기록 저장" else "설정 저장",
                     color = TextPrimaryDark,
                     fontWeight = FontWeight.Bold
                 )
@@ -750,11 +953,21 @@ fun ConsumableActionDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !saving) {
+            val tutorialAction11 = onDismiss
+TextButton(
+modifier = Modifier.tutorialTarget("consumable.close", tutorialAction11),onClick = tutorialAction11, enabled = !saving) {
                 Text("닫기", color = TextSecondaryDark)
             }
         }
     )
+
+    if (showGuideDialog) {
+        ConsumableReplacementGuideDialog(
+            car = car,
+            itemCode = itemCode,
+            onDismiss = { showGuideDialog = false }
+        )
+    }
 }
 
 /**

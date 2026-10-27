@@ -23,6 +23,7 @@ data class ImportResult(
     val swapLogsCount: Int,
     val readingsCount: Int,
     val inspectionsCount: Int = 0,
+    val fuelRecordsCount: Int = 0,
     val missingPhotos: Int = 0
 )
 
@@ -260,6 +261,29 @@ object BackupRestoreManager {
             inspectionsArray.put(insObj)
         }
         root.put("carInspections", inspectionsArray)
+
+        // 9. 주유 기록 직렬화
+        val fuelRecords = db.fuelRecordDao().getAllRecordsDirect()
+        val fuelArray = JSONArray()
+        for (f in fuelRecords) {
+            val fObj = JSONObject().apply {
+                put("id", f.id)
+                put("vehicleId", f.vehicleId)
+                put("odometer", f.odometer)
+                put("fuelAmount", f.fuelAmount)
+                put("unitPrice", f.unitPrice)
+                put("totalPrice", f.totalPrice)
+                put("isFull", f.isFull)
+                put("isMissedPrevious", f.isMissedPrevious)
+                if (f.calculatedEconomy != null) put("calculatedEconomy", f.calculatedEconomy)
+                put("gasStationName", f.gasStationName ?: "")
+                put("refuelDate", f.refuelDate)
+                put("receiptImageUri", f.receiptImageUri ?: "")
+            }
+            fuelArray.put(fObj)
+        }
+        root.put("fuelRecords", fuelArray)
+
         root
         }
         if (context != null) BackupPhotoArchive.pack(context, snapshot)
@@ -526,6 +550,29 @@ object BackupRestoreManager {
                 )
             }
 
+            // 9. 주유 기록 파싱
+            val fuelList = mutableListOf<FuelRecordEntity>()
+            val fuelArray = root.optJSONArray("fuelRecords") ?: JSONArray()
+            for (i in 0 until fuelArray.length()) {
+                val f = fuelArray.getJSONObject(i)
+                fuelList.add(
+                    FuelRecordEntity(
+                        id = f.optLong("id", 0L),
+                        vehicleId = f.getString("vehicleId"),
+                        odometer = f.getInt("odometer"),
+                        fuelAmount = f.getDouble("fuelAmount"),
+                        unitPrice = f.getInt("unitPrice"),
+                        totalPrice = f.getInt("totalPrice"),
+                        isFull = f.optBoolean("isFull", true),
+                        isMissedPrevious = f.optBoolean("isMissedPrevious", false),
+                        calculatedEconomy = if (f.has("calculatedEconomy") && !f.isNull("calculatedEconomy")) f.getDouble("calculatedEconomy") else null,
+                        gasStationName = f.optString("gasStationName").ifEmpty { null },
+                        refuelDate = f.optLong("refuelDate", System.currentTimeMillis()),
+                        receiptImageUri = f.optString("receiptImageUri").ifEmpty { null }
+                    )
+                )
+            }
+
             // 트랜잭션으로 Room DB에 일괄 저장
             db.withTransaction {
                 if (carsList.isNotEmpty()) db.carDao().insertCars(carsList)
@@ -537,6 +584,7 @@ object BackupRestoreManager {
                 if (tiresList.isNotEmpty()) db.tireDao().insertTires(tiresList)
                 if (historiesList.isNotEmpty()) db.tireDao().insertHistories(historiesList)
                 if (inspectionsList.isNotEmpty()) db.carInspectionDao().insertInspections(inspectionsList)
+                if (fuelList.isNotEmpty()) db.fuelRecordDao().insertRecords(fuelList)
             }
 
             committed = true
@@ -549,6 +597,7 @@ object BackupRestoreManager {
                     swapLogsCount = swapLogsList.size,
                     readingsCount = readingsList.size,
                     inspectionsCount = inspectionsList.size,
+                    fuelRecordsCount = fuelList.size,
                     missingPhotos = missingPhotos
                 )
             )

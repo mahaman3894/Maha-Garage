@@ -1,5 +1,7 @@
 package maha.garage.ui.vehicle
 
+import maha.garage.ui.tutorial.*
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
@@ -22,7 +24,8 @@ data class VehicleListUiState(
 
 class VehicleViewModel(
     private val vehicleRepository: VehicleRepository,
-    private val maintenanceRepository: MaintenanceRepository
+    private val maintenanceRepository: MaintenanceRepository,
+    private val demoMode: Boolean = false
 ) : ViewModel() {
 
     private val _listState = MutableStateFlow(VehicleListUiState())
@@ -61,6 +64,7 @@ class VehicleViewModel(
         onResult: (maha.garage.data.remote.dto.VehicleSpecDto?) -> Unit,
         onError: (String) -> Unit
     ) {
+        if (demoMode) { onResult(TutorialFixtures.spec); return }
         viewModelScope.launch {
             try {
                 val spec = vehicleRepository.fetchVehicleSpecByPlate(plateNumber)
@@ -74,9 +78,7 @@ class VehicleViewModel(
     fun saveVehicle(car: CarEntity, isNewCar: Boolean = false, onComplete: () -> Unit) {
         viewModelScope.launch {
             vehicleRepository.saveVehicle(car, isNewCar = isNewCar)
-            if (isNewCar) {
-                ensureInitialTires(car, isNewCar = true)
-            }
+            ensureInitialTires(car, isNewCar = isNewCar)
             onComplete()
         }
     }

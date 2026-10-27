@@ -1,5 +1,7 @@
 package maha.garage.ui.vehicle
 
+import maha.garage.ui.tutorial.*
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -40,6 +42,8 @@ fun UpdateMileageDialog(
     saveError: String? = null
 ) {
     var mileageText by rememberSaveable(car.id) { mutableStateOf("") }
+    val tutorial = LocalTutorial.current
+    LaunchedEffect(tutorial?.index) { if (tutorial?.cue?.target == "mileage.save") mileageText = "50600" }
     var showLowerConfirmation by rememberSaveable(car.id) { mutableStateOf(false) }
     var showOdometerScanner by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -173,7 +177,7 @@ fun UpdateMileageDialog(
                                 focusedTextColor = SoftInk,
                                 unfocusedTextColor = SoftInk
                             ),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f).tutorialTarget("mileage.input") { mileageText = "50600" }
                         )
 
                         // 계기판 OCR 카메라 원형 플로팅 액션 버튼 (FAB)
@@ -237,14 +241,16 @@ fun UpdateMileageDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
+            val tutorialAction5 = tutorialAction5@ {
                     if (isDecreased) {
                         showLowerConfirmation = true
                     } else {
                         onConfirm(newMileage, null, null, null)
                     }
-                },
+                }
+Button(
+modifier = Modifier.tutorialTarget("mileage.save", tutorialAction5),
+                onClick = tutorialAction5,
                 enabled = parsedMileage != null && newMileage >= 0 && !isSaving,
                 colors = ButtonDefaults.buttonColors(containerColor = ToolOrange),
                 shape = RoundedCornerShape(10.dp)

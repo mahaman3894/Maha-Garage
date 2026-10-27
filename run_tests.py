@@ -38,6 +38,8 @@ tests = [
     "maha.garage.ReceiptParserTest",
     "maha.garage.OdometerParserTest",
     "maha.garage.VehiclePinningTest",
+    "maha.garage.GarageLayoutPolicyTest",
+    "maha.garage.TutorialCoordinatesTest",
 ]
 
 cp_forward = cp.replace("\\", "/")

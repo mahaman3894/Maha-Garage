@@ -1,5 +1,7 @@
 package maha.garage.ui.vehicle
 
+import maha.garage.ui.tutorial.*
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -13,6 +15,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -57,6 +60,10 @@ fun VehicleListScreen(
     var selectedCarId by rememberSaveable { mutableStateOf<String?>(null) }
     var savingMileage by remember { mutableStateOf(false) }
     var mileageError by remember { mutableStateOf<String?>(null) }
+    val tutorial = LocalTutorial.current
+    LaunchedEffect(tutorial?.index) {
+        if (tutorial != null) selectedCarId = if (tutorial.cue.target.startsWith("mileage.")) TutorialFixtures.CAR_ID else null
+    }
     val selectedCar = state.vehiclesWithStatus.find { it.car.id == selectedCarId }?.car
 
     Scaffold(
@@ -115,8 +122,10 @@ fun VehicleListScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onNavigateToAddVehicle,
+            val tutorialAction2 = onNavigateToAddVehicle
+ExtendedFloatingActionButton(
+modifier = Modifier.tutorialTarget("garage.add", tutorialAction2),
+                onClick = tutorialAction2,
                 containerColor = ToolYellow,
                 contentColor = SoftInk,
                 shape = RoundedCornerShape(16.dp),
@@ -174,12 +183,14 @@ fun VehicleListScreen(
                 }
             }
         } else {
-            // 반응형 2~4열 자동 그리드 (모바일 세로 2열, 태블릿/데스크톱 3~4열)
+            // 운용 2대 이상이면 휴면도 같은 카드 너비. 운용 1대는 와이드, 휴면은 별도 분할.
+            BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
+            val activeColumns = garageColumnCount(maxWidth.value, state.activeVehicles.size)
+            val restColumns = garageRestColumnCount(maxWidth.value, state.activeVehicles.size, state.dormantVehicles.size)
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 160.dp),
+                columns = GridCells.Fixed(12),
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                    .fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -211,9 +222,10 @@ fun VehicleListScreen(
                         }
                     }
                 } else {
-                    items(state.activeVehicles, key = { it.car.id }) { vehicle ->
+                    items(state.activeVehicles, key = { it.car.id }, span = { GridItemSpan(12 / activeColumns) }) { vehicle ->
                         VehicleIllustrationCard(
                             vehicleWithStatus = vehicle,
+                            modifier = Modifier.tutorialTarget("garage.car") { selectedCarId = vehicle.car.id; mileageError = null },
                             onClick = { selectedCarId = vehicle.car.id; mileageError = null }
                         )
                     }
@@ -226,7 +238,7 @@ fun VehicleListScreen(
                         RestAreaSectionHeader(count = state.dormantVehicles.size)
                     }
 
-                    items(state.dormantVehicles, key = { it.car.id }) { vehicle ->
+                    items(state.dormantVehicles, key = { it.car.id }, span = { GridItemSpan(12 / restColumns) }) { vehicle ->
                         DormantVehicleCard(
                             vehicleWithStatus = vehicle,
                             onClick = { onNavigateToDetail(vehicle.car.id) },
@@ -242,6 +254,7 @@ fun VehicleListScreen(
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Spacer(modifier = Modifier.height(80.dp))
                 }
+            }
             }
         }
     }
@@ -379,6 +392,8 @@ fun DormantVehicleCard(
         border = androidx.compose.foundation.BorderStroke(1.dp, WarmLine),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val compactCard = maxWidth < 220.dp
         Column(
             modifier = Modifier.padding(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -472,18 +487,21 @@ fun DormantVehicleCard(
                     contentColor = JackGreen
                 ),
                 border = androidx.compose.foundation.BorderStroke(1.2.dp, JackGreen.copy(alpha = 0.6f)),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(36.dp)
+                    .heightIn(min = 40.dp)
             ) {
                 Text(
-                    text = "운용 재개 (차고 복귀)",
+                    text = if (compactCard) "운용 재개" else "운용 재개 (차고 복귀)",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     color = JackGreen
                 )
             }
+        }
         }
     }
 }
@@ -496,7 +514,8 @@ fun DormantVehicleCard(
 @Composable
 fun VehicleIllustrationCard(
     vehicleWithStatus: VehicleWithStatus,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val car = vehicleWithStatus.car
     val vehicleImageRes = getVehicleIllustrationRes(
@@ -507,7 +526,7 @@ fun VehicleIllustrationCard(
     )
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = SurfaceWhiteStrong),

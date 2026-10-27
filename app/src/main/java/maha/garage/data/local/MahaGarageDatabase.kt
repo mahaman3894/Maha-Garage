@@ -29,7 +29,7 @@ import maha.garage.data.seed.DefaultCatalogData
         CarInspectionHistoryEntity::class,
         FuelRecordEntity::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -289,21 +289,22 @@ abstract class MahaGarageDatabase : RoomDatabase() {
 
         val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // 기존 데이터 중 동일 차량, 동일 계절, 동일 바퀴 위치에 중복 STORAGE 타이어가 존재하는 경우,
-                // 가장 최근 업데이트된 1개를 제외한 구형 중복 타이어를 'RETIRED'로 정리하여 계절 복귀 조합의 무결성 보장
+                // 특정 바퀴 위치(FL, FR, RL, RR)가 명시적으로 지정된 구형 중복 타이어만 선별 정리 (보관소 전체 타이어 무차별 퇴역 차단)
                 db.execSQL("""
                     UPDATE tires 
                     SET position = 'RETIRED'
                     WHERE isMounted = 0 
                       AND position = 'STORAGE'
+                      AND assignedWheelPosition IN ('FL', 'FR', 'RL', 'RR')
                       AND id NOT IN (
                           SELECT t1.id FROM tires t1
                           WHERE t1.isMounted = 0 AND t1.position = 'STORAGE'
+                            AND t1.assignedWheelPosition IN ('FL', 'FR', 'RL', 'RR')
                             AND t1.updatedAt = (
                                 SELECT max(t2.updatedAt) FROM tires t2
                                 WHERE t2.carId = t1.carId 
                                   AND t2.season = t1.season 
-                                  AND coalesce(t2.assignedWheelPosition, t2.position) = coalesce(t1.assignedWheelPosition, t1.position)
+                                  AND t2.assignedWheelPosition = t1.assignedWheelPosition
                                   AND t2.isMounted = 0 AND t2.position = 'STORAGE'
                             )
                       )
@@ -336,6 +337,23 @@ abstract class MahaGarageDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // 이전 1.1.0 업데이트(v10->v11) 처리에서 억울하게 퇴역(RETIRED) 처리된 보관 타이어 복구
+                // 타이어 장착/교체 이력 테이블에 퇴역(RETIRED) 이벤트가 없는 보관 타이어는 정상 보관(STORAGE) 상태로 원상 복구
+                db.execSQL("""
+                    UPDATE tires 
+                    SET position = 'STORAGE'
+                    WHERE isMounted = 0 
+                      AND position = 'RETIRED'
+                      AND id NOT IN (
+                          SELECT DISTINCT tireId FROM tire_installation_history 
+                          WHERE toPosition = 'RETIRED' OR eventType LIKE '%RETIRED%'
+                      )
+                """.trimIndent())
+            }
+        }
+
         fun getInstance(context: Context): MahaGarageDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -351,11 +369,28 @@ abstract class MahaGarageDatabase : RoomDatabase() {
                                 getInstance(context).catalogDao().insertAll(DefaultCatalogData.items)
                             }
                         }
+
+                        override fun onOpen(db: SupportSQLiteDatabase) {
+                            super.onOpen(db)
+                            // 보관 타이어 안전 복구: 퇴역 이력이 없는데 RETIRED로 잘못 설정된 보관 타이어를 STORAGE로 복구
+                            runCatching {
+                                db.execSQL("""
+                                    UPDATE tires 
+                                    SET position = 'STORAGE'
+                                    WHERE isMounted = 0 
+                                      AND position = 'RETIRED'
+                                      AND id NOT IN (
+                                          SELECT DISTINCT tireId FROM tire_installation_history 
+                                          WHERE toPosition = 'RETIRED' OR eventType LIKE '%RETIRED%'
+                                      )
+                                """.trimIndent())
+                            }
+                        }
                     })
                     .addMigrations(
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
                         MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-                        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12
+                        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13
                     )
                     .build()
                 INSTANCE = instance

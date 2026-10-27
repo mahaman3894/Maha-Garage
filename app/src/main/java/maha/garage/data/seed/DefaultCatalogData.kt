@@ -84,15 +84,6 @@ object DefaultCatalogData {
             ),
             guideNotes = "엔진 흡기 에어크리너(에어필터). 표시 주기: 15,000 ~ 20,000 km (15,000km부터 점검 및 교체 권장)."
         ),
-        MaintenanceCatalogEntity(
-            itemCode = "WASHER_FLUID",
-            displayName = "워셔액",
-            category = "기타/소모품",
-            priority = RulePriority.P1,
-            defaultActionType = ActionType.REFILL,
-            isConditionBased = true,
-            guideNotes = "부족 경고등 점등 시 에탄올 워셔액으로 보충."
-        ),
 
         // ==================== P2: 주행 체감 및 공조/제동 ====================
         MaintenanceCatalogEntity(
@@ -286,11 +277,11 @@ object DefaultCatalogData {
             category = "엔진/구동",
             priority = RulePriority.P4,
             defaultActionType = ActionType.REPLACE,
-            defaultIntervalKm = 40000,
+            defaultIntervalKm = 50000,
             defaultIntervalMonths = 24,
             firstIntervalKm = 100000,
             firstIntervalMonths = 60,
-            guideNotes = "최초 출고 시 100,000km/60개월, 이후 40,000~60,000km/24개월 주기 교체."
+            guideNotes = "최초 100,000km ~ 200,000km (5~10년), 이후 매 40,000km ~ 50,000km (2년) 주기 교체."
         ),
         MaintenanceCatalogEntity(
             itemCode = "EV_COOLANT",
@@ -298,12 +289,12 @@ object DefaultCatalogData {
             category = "엔진/구동",
             priority = RulePriority.P4,
             defaultActionType = ActionType.REPLACE,
-            defaultIntervalKm = 40000,
+            defaultIntervalKm = 50000,
             defaultIntervalMonths = 24,
             firstIntervalKm = 100000,
             firstIntervalMonths = 60,
             applicablePowertrains = listOf(PowertrainType.BEV, PowertrainType.PHEV_GASOLINE),
-            guideNotes = "고전압 배터리 절연 안전을 위한 전용 저전도도 냉각수 사용 필수 (최초 10만km/5년 후 4만km 주기)."
+            guideNotes = "고전압 배터리 절연 안전을 위한 전용 저전도도 냉각수 (최초 100,000~200,000km/5~10년, 이후 매 40,000~50,000km/2년)."
         ),
         MaintenanceCatalogEntity(
             itemCode = "TIMING_BELT_SET",
@@ -359,16 +350,6 @@ object DefaultCatalogData {
 
         // ==================== P5: 점검 및 섀시 세이프티 ====================
         MaintenanceCatalogEntity(
-            itemCode = "WHEEL_ALIGNMENT",
-            displayName = "휠 얼라인먼트 점검",
-            category = "타이어/휠",
-            priority = RulePriority.P5,
-            defaultActionType = ActionType.INSPECT,
-            defaultIntervalKm = 20000,
-            defaultIntervalMonths = 12,
-            guideNotes = "차량 쏠림, 핸들 틀어짐 또는 신품 타이어 교체 시 필수 점검."
-        ),
-        MaintenanceCatalogEntity(
             itemCode = "BRAKE_DISC",
             displayName = "브레이크 디스크 로터",
             category = "제동계통",
@@ -377,16 +358,6 @@ object DefaultCatalogData {
             defaultIntervalKm = 60000,
             isConditionBased = true,
             guideNotes = "제동 시 핸들 떨림, 런아웃 오차 또는 마모 한계선 도달 시 연마/교체."
-        ),
-        MaintenanceCatalogEntity(
-            itemCode = "SUSPENSION_BUSHING",
-            displayName = "로워암/부싱 및 쇼크업소버",
-            category = "섀시/조향",
-            priority = RulePriority.P5,
-            defaultActionType = ActionType.INSPECT,
-            defaultIntervalKm = 40000,
-            isConditionBased = true,
-            guideNotes = "과속방지턱 통과 시 찌걱거림 소음, 오일 누유 및 고무 크랙 점검."
         ),
         MaintenanceCatalogEntity(
             itemCode = "DIFFERENTIAL_OIL",

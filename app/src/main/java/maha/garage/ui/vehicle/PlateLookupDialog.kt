@@ -1,5 +1,7 @@
 package maha.garage.ui.vehicle
 
+import maha.garage.ui.tutorial.*
+
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -112,12 +114,12 @@ fun PlateLookupFloatingButton(
             ) {
                 Icon(
                     imageVector = Icons.Default.AutoAwesome,
-                    contentDescription = "차량번호 제원 자동조회",
+                    contentDescription = "차량번호조회",
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
                 )
                 Text(
-                    text = "제원조회",
+                    text = "차량번호조회",
                     fontSize = 9.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White
@@ -136,154 +138,15 @@ fun PlateLookupDialog(
     onDismiss: () -> Unit,
     onLookup: (plateNumber: String, onComplete: (Boolean) -> Unit) -> Unit
 ) {
-    var plateInput by remember { mutableStateOf(initialPlate) }
-    var isSearching by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    val plateRegex = remember { Regex("^[0-9]{2,3}[가-힣]{1}[0-9]{4}$|^[가-힣]{2}[0-9]{2}[가-힣]{1}[0-9]{4}$") }
-
-    Dialog(
+    AlertDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .wrapContentHeight(),
-            shape = RoundedCornerShape(22.dp),
-            color = SurfaceDark,
-            border = BorderStroke(1.5.dp, Color(0xFF38BDF8).copy(alpha = 0.6f)),
-            shadowElevation = 12.dp
-        ) {
-            Column(modifier = Modifier.padding(22.dp)) {
-                // 상단 헤더
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = Color(0xFF38BDF8).copy(alpha = 0.2f),
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = null,
-                                    tint = Color(0xFF38BDF8),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = "차량번호 제원 자동 조회",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF38BDF8)
-                            )
-                            Text(
-                                text = "공공데이터 API 실시간 자동 매칭",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextSecondaryDark
-                            )
-                        }
-                    }
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(30.dp)) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = "닫기", tint = TextSecondaryDark)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                Text(
-                    text = "번호판만 입력하면 모델명, 배기량, 유종, 검사일이 자동 입력됩니다.",
-                    fontSize = 12.5.sp,
-                    color = TextSecondaryDark,
-                    lineHeight = 18.sp
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                OutlinedTextField(
-                    value = plateInput,
-                    onValueChange = {
-                        plateInput = it
-                        errorMessage = null
-                    },
-                    label = { Text("차량 번호판 (예: 12가 3456)") },
-                    placeholder = { Text("12가 3456 또는 123가 4567", color = TextSecondaryDark) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF38BDF8),
-                        unfocusedBorderColor = BorderDark,
-                        focusedTextColor = TextPrimaryDark,
-                        unfocusedTextColor = TextPrimaryDark,
-                        focusedContainerColor = SurfaceVariantDark,
-                        unfocusedContainerColor = SurfaceVariantDark
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                if (errorMessage != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = errorMessage!!,
-                        color = StatusOverdue,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Button(
-                    onClick = {
-                        val target = plateInput.replace(" ", "").trim()
-                        if (!target.matches(plateRegex)) {
-                            errorMessage = "올바른 번호판 형식이 아닙니다. (예: 12가 3456, 123가 4567)"
-                        } else {
-                            isSearching = true
-                            errorMessage = null
-                            onLookup(target) { success ->
-                                isSearching = false
-                                if (!success) {
-                                    errorMessage = "조회된 차량 정보가 없습니다. 번호판을 확인해주세요."
-                                } else {
-                                    onDismiss()
-                                }
-                            }
-                        }
-                    },
-                    enabled = !isSearching && plateInput.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF2563EB),
-                        disabledContainerColor = SurfaceVariantDark
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                ) {
-                    if (isSearching) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = Color.White,
-                            strokeWidth = 2.5.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("공공데이터 조회 중...", fontWeight = FontWeight.Bold)
-                    } else {
-                        Icon(imageVector = Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("제원 조회 및 자동 입력", fontWeight = FontWeight.Bold)
-                    }
-                }
+        title = { Text("해당 서비스는 준비중 입니다.", fontSize = 24.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.tutorialTarget("plate.notice")) },
+        text = { Text("개인정보 수집관련 이슈", fontSize = 13.sp, color = TextSecondaryDark) },
+        confirmButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.tutorialTarget("plate.close", onDismiss)) {
+                Text("확인")
             }
         }
-    }
+    )
 }

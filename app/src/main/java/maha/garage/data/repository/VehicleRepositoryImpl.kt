@@ -141,8 +141,9 @@ class VehicleRepositoryImpl(
                     )
                 } else old
 
-                // 신차 출고 설정인데 기존에 교환 이력 및 관리 기준이 없던 항목은 0km 기산점 부여
-                if (isNewCar && ruleToSave.lastServiceMileage == null && (ruleToSave.baselineMileage == null || ruleToSave.baselineMileage == previous.currentMileage)) {
+                // 신차 출고 설정이거나 1,000km 이하 차량: 기존에 교환 이력 및 관리 기준이 없던 항목은 0km 기산점 부여
+                val isEffectivelyNew = isNewCar || car.currentMileage <= 1000
+                if (isEffectivelyNew && ruleToSave.lastServiceMileage == null && (ruleToSave.baselineMileage == null || ruleToSave.baselineMileage == previous.currentMileage)) {
                     ruleToSave.copy(
                         baselineMileage = 0,
                         baselineDate = car.firstRegistrationDate ?: LocalDate.now().toString(),
@@ -159,16 +160,46 @@ class VehicleRepositoryImpl(
         val existingRules = db.maintenanceRuleDao().getAllRulesForCarDirect(car.id)
         if (existingRules.isEmpty()) {
             val catalog = db.catalogDao().getAllCatalogDirect()
+            val isEffectivelyNew = isNewCar || car.currentMileage <= 1000
             val newRules = ApplicabilityResolver.resolveDefaultRules(car, catalog).map { rule ->
-                if (isNewCar) {
-                    // 신차 출고 등록 시: 모든 소모품이 0km 신품에서 시작하므로 0km 기산점 설정
+                if (isEffectivelyNew) {
+                    // 신차 출고 등록 시 또는 1,000km 이하 차량: 모든 소모품이 0km 신품에서 시작하므로 0km 기산점 설정
                     rule.copy(
                         baselineMileage = 0,
                         baselineDate = car.firstRegistrationDate ?: LocalDate.now().toString(),
                         baselineHours = 0.0
                     )
                 } else {
-                    rule
+                    // 중고차 등록 시 (1,000km 초과)
+                    val effectiveKm = rule.firstIntervalKm ?: rule.intervalKm ?: 0
+                    when {
+                        // 1. 5만km 이상 장주기 부품 (타이밍벨트, 워터펌프, 미션오일, 점화플러그, 냉각수/부동액 등): 출고 0km부터 누적 측정
+                        effectiveKm >= 50000 -> {
+                            rule.copy(
+                                baselineMileage = 0,
+                                baselineDate = car.firstRegistrationDate ?: LocalDate.now().toString(),
+                                baselineHours = 0.0
+                            )
+                        }
+                        // 2. 1.6만km 이상 ~ 5만km 미만 부품 (브레이크 패드, 브레이크액, 연료필터 등): 절반 정도의 교환주기 경과로 간주
+                        effectiveKm >= 16000 -> {
+                            val halfKm = effectiveKm / 2
+                            val halfMonths = rule.intervalMonths?.let { (it / 2).coerceAtLeast(1) }
+                            rule.copy(
+                                baselineMileage = (car.currentMileage - halfKm).coerceAtLeast(0),
+                                baselineDate = halfMonths?.let { LocalDate.now().minusMonths(it.toLong()).toString() },
+                                baselineHours = null
+                            )
+                        }
+                        // 3. 1.5만km 이하 부품 (엔진오일, 에어컨필터, 와이퍼 등): 정보없음 (교환 기록 등록 대기)
+                        else -> {
+                            rule.copy(
+                                baselineMileage = null,
+                                baselineDate = null,
+                                baselineHours = null
+                            )
+                        }
+                    }
                 }
             }
             db.maintenanceRuleDao().insertRules(newRules)
@@ -386,7 +417,7 @@ class VehicleRepositoryImpl(
                 vehicleClass = maha.garage.data.model.enums.VehicleClass.SUV,
                 modelYear = 2022
             )
-            plate.matches(Regex("^[0-9]{2,3}[가-힣]{1}[0-9]{4}$|^[가-힣]{2}[0-9]{2}[가-힣]{1}[0-9]{4}$")) -> maha.garage.data.remote.dto.VehicleSpecDto(
+            plate.contains("11가1111") || plate.contains("아반떼") -> maha.garage.data.remote.dto.VehicleSpecDto(
                 plateNumber = plate,
                 modelName = "아반떼 1.6 가솔린 (CN7)",
                 manufacturer = "현대",

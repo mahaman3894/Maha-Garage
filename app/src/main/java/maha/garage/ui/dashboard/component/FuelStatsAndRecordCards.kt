@@ -158,7 +158,20 @@ fun FuelRecordItemCard(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (record.calculatedEconomy != null) {
+                    if (record.isMissedPrevious) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFFFF7ED)
+                        ) {
+                            Text(
+                                text = "직전 주유 누락",
+                                color = Color(0xFFC2410C),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else if (record.calculatedEconomy != null) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = Color(0xFFE0F2FE)
@@ -181,19 +194,6 @@ fun FuelRecordItemCard(
                                 color = Color(0xFFB45309),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    } else if (record.isMissedPrevious) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = Color(0xFFF1F5F9)
-                        ) {
-                            Text(
-                                text = "누락 리셋",
-                                color = Color(0xFF64748B),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }

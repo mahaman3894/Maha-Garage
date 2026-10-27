@@ -90,14 +90,48 @@ class FuelRepositoryImpl(
             carDao.updateCar(car.copy(currentMileage = odometer, updatedAt = System.currentTimeMillis()))
         }
 
+        // 6. 전체 주유 기록 연비 일관성 재계산 (과거/중간 기록 삽입 시 이후 연비 동기화)
+        recalculateAllEconomyForVehicle(vehicleId)
+
         return entity.copy(id = insertedId)
     }
 
     override suspend fun deleteRecord(record: FuelRecordEntity) {
         fuelDao.deleteRecord(record)
+        recalculateAllEconomyForVehicle(record.vehicleId)
     }
 
     override suspend fun deleteById(id: Long) {
+        val record = fuelDao.getRecordById(id)
         fuelDao.deleteById(id)
+        if (record != null) {
+            recalculateAllEconomyForVehicle(record.vehicleId)
+        }
+    }
+
+    private suspend fun recalculateAllEconomyForVehicle(vehicleId: String) {
+        val allRecords = fuelDao.getRecordsForVehicleAsc(vehicleId)
+        if (allRecords.isEmpty()) return
+
+        val updatedRecords = mutableListOf<FuelRecordEntity>()
+        val historyInputs = mutableListOf<FuelCalculationInput>()
+
+        for (record in allRecords) {
+            val currentInput = FuelCalculationInput(
+                odometer = record.odometer,
+                fuelAmount = record.fuelAmount,
+                isFull = record.isFull,
+                isMissedPrevious = record.isMissedPrevious
+            )
+            val calcResult = FuelCalculator.calculate(currentInput, historyInputs)
+            if (record.calculatedEconomy != calcResult.segmentEconomy) {
+                updatedRecords.add(record.copy(calculatedEconomy = calcResult.segmentEconomy))
+            }
+            historyInputs.add(currentInput)
+        }
+
+        if (updatedRecords.isNotEmpty()) {
+            fuelDao.updateRecords(updatedRecords)
+        }
     }
 }

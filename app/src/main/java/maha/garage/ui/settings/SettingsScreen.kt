@@ -1,5 +1,7 @@
 package maha.garage.ui.settings
 
+import maha.garage.ui.tutorial.*
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -24,7 +26,8 @@ import maha.garage.util.NotificationSettingsStore
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    onNavigateToCarHistory: () -> Unit = {}
+    onNavigateToCarHistory: () -> Unit = {},
+    onStartTutorial: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val versionName = remember(context) {
@@ -33,6 +36,11 @@ fun SettingsScreen(
     val settingsStore = remember { NotificationSettingsStore(context) }
     var notifyInspection by remember { mutableStateOf(settingsStore.isInspectionEnabled) }
     var notifyInsurance by remember { mutableStateOf(settingsStore.isInsuranceEnabled) }
+    val tutorial = LocalTutorial.current
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(tutorial?.index) {
+        if (tutorial?.cue?.target == "settings.history") listState.scrollToItem(2)
+    }
 
     Scaffold(
         topBar = {
@@ -50,12 +58,20 @@ fun SettingsScreen(
         }
     ) { padding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            item {
+                OutlinedButton(onClick = onStartTutorial, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.PlayCircle, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("튜토리얼 다시 보기")
+                }
+            }
             // 1. 앱 헤더 카드
             item {
                 Card(
@@ -156,11 +172,12 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        Button(
-                            onClick = onNavigateToCarHistory,
+                        val tutorialAction1 = onNavigateToCarHistory
+Button(
+                            onClick = tutorialAction1,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp),
+                                .height(48.dp).tutorialTarget("settings.history", tutorialAction1),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = GaragePrimaryLight)
                         ) {

@@ -1,5 +1,7 @@
 package maha.garage.ui
 
+import maha.garage.ui.tutorial.*
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -37,7 +39,10 @@ import maha.garage.ui.vehicle.VehicleListScreen
 import maha.garage.ui.vehicle.VehicleViewModel
 
 @Composable
-fun MainAppScreen(app: MahaGarageApp, targetVehicleId: String? = null, onTargetConsumed: () -> Unit = {}) {
+internal fun GarageContent(app: MahaGarageApp, targetVehicleId: String? = null, onTargetConsumed: () -> Unit = {}, tutorial: TutorialSession? = null, onStartTutorial: () -> Unit = {}) {
+    val vehicles = tutorial?.vehicles ?: app.vehicleRepository
+    val maintenance = tutorial?.maintenance ?: app.maintenanceRepository
+    val fuel = tutorial?.fuel ?: app.fuelRepository
     val navController = rememberNavController()
     LaunchedEffect(targetVehicleId) {
         if (targetVehicleId != null) {
@@ -54,18 +59,43 @@ fun MainAppScreen(app: MahaGarageApp, targetVehicleId: String? = null, onTargetC
     // 공용 레포지토리 기반 ViewModel 생성
     val dashboardViewModel = remember {
         DashboardViewModel(
-            vehicleRepository = app.vehicleRepository,
-            fuelRepository = app.fuelRepository,
-            preferencesStore = maha.garage.data.preferences.FuelPreferencesStore.getInstance(app)
+            vehicleRepository = vehicles,
+            fuelRepository = fuel,
+            preferencesStore = if (tutorial == null) maha.garage.data.preferences.FuelPreferencesStore.getInstance(app) else null
         )
     }
     val vehicleViewModel = remember {
-        VehicleViewModel(app.vehicleRepository, app.maintenanceRepository)
+        VehicleViewModel(vehicles, maintenance, demoMode = tutorial != null)
     }
     val serviceViewModel = remember {
-        ServiceViewModel(app.maintenanceRepository, app.vehicleRepository)
+        ServiceViewModel(maintenance, vehicles)
     }
 
+    DisposableEffect(tutorial) {
+        if (tutorial != null) tutorial.viewModels.addAll(listOf(dashboardViewModel, vehicleViewModel, serviceViewModel))
+        onDispose { }
+    }
+    LaunchedEffect(tutorial?.index) {
+        if (tutorial != null) {
+            val route = when (tutorial.cue.page) {
+                "add" -> Screen.AddEditVehicle.createRoute(null)
+                "detail" -> Screen.VehicleDetail.createRoute(TutorialFixtures.CAR_ID)
+                "dashboard" -> Screen.Dashboard.route
+                "settings" -> Screen.Settings.route
+                "history" -> Screen.CarHistory.createRoute(TutorialFixtures.CAR_ID)
+                else -> Screen.Vehicles.route
+            }
+            if (navController.currentDestination?.route != route && tutorial.cue.page !in listOf("add", "detail", "history")) {
+                navController.navigate(route) { popUpTo(navController.graph.findStartDestination().id); launchSingleTop = true }
+            } else if (tutorial.cue.page in listOf("add", "detail", "history")) {
+                val currentPage = navController.currentBackStackEntry?.destination?.route.orEmpty()
+                val prefix = route.substringBefore('?').substringBefore('/')
+                if (!currentPage.startsWith(prefix)) navController.navigate(route) {
+                    popUpTo(navController.graph.findStartDestination().id); launchSingleTop = true
+                }
+            }
+        }
+    }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
@@ -249,6 +279,7 @@ fun MainAppScreen(app: MahaGarageApp, targetVehicleId: String? = null, onTargetC
             // 7. 환경설정 & 정보
             composable(Screen.Settings.route) {
                 SettingsScreen(
+                    onStartTutorial = onStartTutorial,
                     onNavigateToCarHistory = {
                         navController.navigate(Screen.CarHistory.createRoute())
                     }
@@ -270,7 +301,7 @@ fun MainAppScreen(app: MahaGarageApp, targetVehicleId: String? = null, onTargetC
                 val carsState by vehicleViewModel.listState.collectAsState()
                 maha.garage.ui.history.CarHistoryScreen(
                     cars = carsState.vehiclesWithStatus.map { it.car },
-                    loadVisits = { carId, fromDate -> app.maintenanceRepository.getVisitsForPeriod(carId, fromDate) },
+                    loadVisits = { carId, fromDate -> maintenance.getVisitsForPeriod(carId, fromDate) },
                     initialCarId = vehicleId,
                     onNavigateBack = { navController.popBackStack() }
                 )

@@ -41,10 +41,25 @@ object MaintenanceScheduleEngine {
         val baseDateStr: String? = rule.lastServiceDate ?: (if (isBaseline) rule.baselineDate else null)
         val baseHours: Double? = rule.lastServiceHours ?: (if (isBaseline) rule.baselineHours else null)
 
+        // 최초 출고 주기(firstInterval)는 실제 교체 이력이 없고, 기준 마일리지가 신차 출고(0km)인 경우(또는 기준이 없는 상태)에만 적용
+        // 이미 주행한 차량에서 '현재부터 관리 시작'(baselineMileage > 0)을 설정한 경우에는 일반 교환 주기(intervalKm)를 적용
+        val isFirstCycle = !hasReplacement && (baseMileage == null || baseMileage == 0)
+        val effectiveIntervalKm = if (isFirstCycle && (rule.firstIntervalKm ?: 0) > 0) {
+            rule.firstIntervalKm
+        } else {
+            intervalKm
+        }
+
+        val effectiveIntervalMonths = if (isFirstCycle && (rule.firstIntervalMonths ?: 0) > 0) {
+            rule.firstIntervalMonths
+        } else {
+            intervalMonths
+        }
+
         // 2. 주행거리 기준 산출 (독립 계산, 오버플로우 방지)
         // 다음 교환 주행거리 = 마지막 교환(또는 관리기준) 주행거리 + 설정한 거리 주기 (0km도 유효)
-        val nextDueKm: Int? = if (baseMileage != null && intervalKm != null) {
-            val sum = baseMileage.toLong() + intervalKm.toLong()
+        val nextDueKm: Int? = if (baseMileage != null && effectiveIntervalKm != null) {
+            val sum = baseMileage.toLong() + effectiveIntervalKm.toLong()
             if (sum > Int.MAX_VALUE) Int.MAX_VALUE else if (sum < 0L) 0 else sum.toInt()
         } else {
             null
@@ -62,8 +77,8 @@ object MaintenanceScheduleEngine {
         val baseDate: LocalDate? = baseDateStr?.let { dateStr ->
             runCatching { LocalDate.parse(dateStr, dateFormatter) }.getOrNull()
         }
-        val nextDueDateString: String? = if (baseDate != null && intervalMonths != null) {
-            baseDate.plusMonths(intervalMonths.toLong()).format(dateFormatter)
+        val nextDueDateString: String? = if (baseDate != null && effectiveIntervalMonths != null) {
+            baseDate.plusMonths(effectiveIntervalMonths.toLong()).format(dateFormatter)
         } else {
             null
         }
@@ -92,9 +107,9 @@ object MaintenanceScheduleEngine {
             calculateProgressRatio(
                 car = car,
                 baseMileage = baseMileage,
-                intervalKm = intervalKm,
+                intervalKm = effectiveIntervalKm,
                 baseDate = baseDate,
-                intervalMonths = intervalMonths,
+                intervalMonths = effectiveIntervalMonths,
                 remainingDays = remainingDays,
                 baseHours = baseHours,
                 intervalHours = intervalHours,
@@ -110,7 +125,8 @@ object MaintenanceScheduleEngine {
             isBaseline = isBaseline,
             remainingKm = remainingKm,
             remainingDays = remainingDays,
-            remainingHours = remainingHours
+            remainingHours = remainingHours,
+            car = car
         )
 
         val effectiveDisplayName = when (rule.itemCode) {
@@ -124,6 +140,7 @@ object MaintenanceScheduleEngine {
         }
 
         val effectiveGuideNotes = when (rule.itemCode) {
+            "COOLANT", "EV_COOLANT" -> "표시 주기: 최초 100,000 ~ 200,000 km (5~10년), 이후 매 40,000 ~ 50,000 km (2년)"
             "TIMING_BELT_SET" -> "표시 주기: 80,000 ~ 100,000 km (8만km부터 점검 및 옐로우 알림)"
             "TIMING_BELT_WATER_PUMP" -> "표시 주기: 100,000 ~ 130,000 km (10만km부터 점검 및 옐로우 알림)"
             "BATTERY_12V" -> "표시 주기: 약 50,000 ~ 60,000 km / 3년 ~ 4년 (기간 기준 우선)"
@@ -152,8 +169,8 @@ object MaintenanceScheduleEngine {
             lastServiceMileage = rule.lastServiceMileage,
             lastServiceHours = rule.lastServiceHours,
             lastConditionValue = rule.lastConditionValue,
-            intervalKm = intervalKm,
-            intervalMonths = intervalMonths,
+            intervalKm = effectiveIntervalKm,
+            intervalMonths = effectiveIntervalMonths,
             intervalHours = intervalHours,
             sourceType = rule.sourceType,
             isConditionBased = catalogItem.isConditionBased,
@@ -206,7 +223,8 @@ object MaintenanceScheduleEngine {
         isBaseline: Boolean,
         remainingKm: Int?,
         remainingDays: Long?,
-        remainingHours: Double?
+        remainingHours: Double?,
+        car: CarEntity? = null
     ): Pair<DueStatus, String> {
         val conditionMm: Double? = if (catalogItem.isConditionBased) {
             parseValidConditionThickness(rule.lastConditionValue)
@@ -214,6 +232,11 @@ object MaintenanceScheduleEngine {
 
         // 1. 상태 기반(Condition Based) 부품의 마모 한계선 실측치 판정 (교환 기록 유무와 무관하게 동작)
         if (conditionMm != null && conditionMm <= 3.0) {
+            if (rule.userCustomNotes?.startsWith("INSPECTED:") == true) {
+                val parts = rule.userCustomNotes.split(":")
+                val actionLabel = if (parts.size >= 3) parts[2] else "점검/정비"
+                return DueStatus.DUE_SOON to "잔여 두께 ${conditionMm}mm: $actionLabel 완료 (마모 한계 도달 - 교체 예정)"
+            }
             return DueStatus.OVERDUE to "잔여 두께 ${conditionMm}mm: 마모 한계선 도달 (즉시 교체 필요)"
         }
 
@@ -255,6 +278,11 @@ object MaintenanceScheduleEngine {
         // 상태 기반(Condition Based) 부품 처리 (예: 브레이크 패드)
         if (catalogItem.isConditionBased) {
             if ((remainingKm != null && remainingKm <= 0) || (remainingDays != null && remainingDays <= 0) || (remainingHours != null && remainingHours <= 0)) {
+                if (rule.userCustomNotes?.startsWith("INSPECTED:") == true) {
+                    val parts = rule.userCustomNotes.split(":")
+                    val actionLabel = if (parts.size >= 3) parts[2] else "점검/정비"
+                    return DueStatus.DUE_SOON to "${actionLabel} 완료 (마모 상태 점검 완료 - 교체 권장 임박)"
+                }
                 return DueStatus.INSPECTION_DUE to "정기 점검 시기 도래 (마모도/잔여량 실측 필요)"
             }
             if (conditionMm != null && conditionMm <= 5.0) {
@@ -280,6 +308,16 @@ object MaintenanceScheduleEngine {
         val isHourDueNow = remainingHours != null && remainingHours == 0.0
 
         val prefix = if (isBaseline) "(관리 기준) " else ""
+
+        val isOverdueOrDueNow = isKmOverdue || isDateOverdue || isHourOverdue || isKmDueNow || isDateDueNow || isHourDueNow
+        if (isOverdueOrDueNow && rule.userCustomNotes?.startsWith("INSPECTED:") == true) {
+            val parts = rule.userCustomNotes.split(":")
+            val actionLabel = if (parts.size >= 3) parts[2] else "점검/정비"
+            val inspectKm = if (parts.size >= 5) parts[4].toIntOrNull() else null
+            val drivenSinceInspect = if (inspectKm != null && car != null) (car.currentMileage - inspectKm).coerceAtLeast(0) else null
+            val drivenText = if (drivenSinceInspect != null && drivenSinceInspect > 0) " (${drivenSinceInspect}km 전)" else ""
+            return DueStatus.DUE_SOON to "${prefix}${actionLabel} 완료 (교체 권장 임박$drivenText)"
+        }
 
         if (isKmOverdue || isDateOverdue || isHourOverdue) {
             val reason = when {

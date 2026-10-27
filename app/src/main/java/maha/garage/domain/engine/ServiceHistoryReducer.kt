@@ -11,11 +11,30 @@ object ServiceHistoryReducer {
             if (line.actionType == ActionType.REPLACE) {
                 if (result.lastServiceDate == null || visit.serviceDate > result.lastServiceDate!! ||
                     (visit.serviceDate == result.lastServiceDate && visit.odometerKm >= (result.lastServiceMileage ?: 0))) {
-                    result = result.copy(lastServiceDate = visit.serviceDate, lastServiceMileage = visit.odometerKm,
-                        lastServiceHours = visit.engineHours, lastConditionValue = line.conditionValue)
+                    result = result.copy(
+                        lastServiceDate = visit.serviceDate,
+                        lastServiceMileage = visit.odometerKm,
+                        lastServiceHours = visit.engineHours,
+                        lastConditionValue = line.conditionValue,
+                        userCustomNotes = null
+                    )
                 }
-            } else if (line.conditionValue != null && (result.lastServiceDate == null || visit.serviceDate >= result.lastServiceDate!!)) {
-                result = result.copy(lastConditionValue = line.conditionValue)
+            } else {
+                if (line.conditionValue != null && (result.lastServiceDate == null || visit.serviceDate >= result.lastServiceDate!!)) {
+                    result = result.copy(lastConditionValue = line.conditionValue)
+                }
+                // 점검, 정비, 보충, 세척 등 비교체 액션 기록 시
+                if (result.lastServiceDate == null || visit.serviceDate >= result.lastServiceDate!!) {
+                    val actionLabel = when (line.actionType) {
+                        ActionType.INSPECT -> "점검"
+                        ActionType.REFILL -> "교환/보충"
+                        ActionType.CLEAN -> "정비"
+                        else -> "점검/정비"
+                    }
+                    result = result.copy(
+                        userCustomNotes = "INSPECTED:${line.actionType.name}:$actionLabel:${visit.serviceDate}:${visit.odometerKm}"
+                    )
+                }
             }
         }
         return result

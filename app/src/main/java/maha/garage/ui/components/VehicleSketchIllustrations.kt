@@ -1,5 +1,7 @@
 package maha.garage.ui.components
 
+import maha.garage.ui.tutorial.*
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -449,6 +451,7 @@ fun VehicleConsumablesSketchMap(
                                     )
                                 }
                                 .requiredSize(marker.box.width.dp, marker.box.height.dp)
+                                .tutorialTarget(if (marker.code == "ENGINE_OIL") "detail.oil" else "marker.${marker.code}") { onMarkerClick(marker.code) }
                                 .clickable { onMarkerClick(marker.code) },
                             shape = RoundedCornerShape(12.dp),
                             color = SurfaceWhiteStrong,

@@ -1,5 +1,7 @@
 package maha.garage.ui.vehicle
 
+import maha.garage.ui.tutorial.*
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -67,10 +69,12 @@ fun EmergencyDispatchDialog(
     onSaveInsurancePhone: ((phone: String) -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val tutorial = LocalTutorial.current
     var showAllInsurers by remember { mutableStateOf(false) }
     var showAccidentGuide by remember { mutableStateOf(false) }
 
     fun dial(phone: String) {
+        if (tutorial != null) { tutorial.feedback = "전화 연결 시연 완료 · 실제 전화 앱은 열지 않았습니다."; return }
         try {
             val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${phone.replace("-", "")}"))
             context.startActivity(intent)
@@ -234,9 +238,10 @@ fun EmergencyDispatchDialog(
                 val registeredPhone = car.insuranceEmergencyCall?.takeIf { it.isNotBlank() }
                 if (registeredPhone != null) {
                     val companyName = car.insuranceCompany?.takeIf { it.isNotBlank() } ?: "내 보험사"
-                    Button(
-                        onClick = { dial(registeredPhone) },
-                        modifier = Modifier.fillMaxWidth(),
+                    val tutorialAction9 = tutorialAction9@ { dial(registeredPhone) }
+Button(
+                        onClick = tutorialAction9,
+                        modifier = Modifier.fillMaxWidth().tutorialTarget("emergency.phone", tutorialAction9),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = SketchRed)
                     ) {
@@ -499,8 +504,10 @@ fun EmergencyDispatchDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = onDismiss,
+            val tutorialAction10 = onDismiss
+Button(
+modifier = Modifier.tutorialTarget("emergency.close", tutorialAction10),
+                onClick = tutorialAction10,
                 colors = ButtonDefaults.buttonColors(containerColor = SoftInk),
                 shape = RoundedCornerShape(10.dp)
             ) {

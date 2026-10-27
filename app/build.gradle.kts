@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -14,8 +17,8 @@ android {
         applicationId = "com.mahaman.myapp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.0.9"
+        versionCode = 104
+        versionName = "1.1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -26,15 +29,30 @@ android {
             arg("room.schemaLocation", "$projectDir/schemas")
             arg("room.incremental", "true")
             arg("room.expandProjection", "true")
+            arg("room.expandProjection", "true")
         }
     }
 
+    val localProps = Properties().apply {
+        val f = rootProject.file("local.properties")
+        if (f.exists()) {
+            FileInputStream(f).use { load(it) }
+        }
+    }
+    val storeFilePath = localProps.getProperty("RELEASE_STORE_FILE") ?: System.getenv("RELEASE_STORE_FILE") ?: ""
+    val storePasswordVal = localProps.getProperty("RELEASE_STORE_PASSWORD") ?: System.getenv("RELEASE_STORE_PASSWORD") ?: ""
+    val keyAliasVal = localProps.getProperty("RELEASE_KEY_ALIAS") ?: System.getenv("RELEASE_KEY_ALIAS") ?: ""
+    val keyPasswordVal = localProps.getProperty("RELEASE_KEY_PASSWORD") ?: System.getenv("RELEASE_KEY_PASSWORD") ?: ""
+
     signingConfigs {
         create("release") {
-            storeFile = file("${rootDir}/keystore/maha_release.jks")
-            storePassword = "mahaGarage2026!#"
-            keyAlias = "mahagarage"
-            keyPassword = "mahaGarage2026!#"
+            val keyFile = rootProject.file(storeFilePath)
+            if (keyFile.exists() && storePasswordVal.isNotEmpty()) {
+                storeFile = keyFile
+                storePassword = storePasswordVal
+                keyAlias = keyAliasVal
+                keyPassword = keyPasswordVal
+            }
         }
     }
 
@@ -42,7 +60,10 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            val releaseSigning = signingConfigs.getByName("release")
+            if (releaseSigning.storeFile != null && releaseSigning.storeFile!!.exists()) {
+                signingConfig = releaseSigning
+            }
             ndk {
                 debugSymbolLevel = "SYMBOL_TABLE"
             }
@@ -140,7 +161,22 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20180813")
+    testImplementation("androidx.compose.ui:ui-graphics")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    androidTestImplementation("androidx.exifinterface:exifinterface:1.3.7")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+}
+
+tasks.register<JavaExec>("runVerifyTests") {
+    dependsOn("compileDebugKotlin", "compileDebugUnitTestKotlin")
+    workingDir = rootDir
+    classpath = files(
+        configurations.getByName("debugUnitTestRuntimeClasspath"),
+        configurations.getByName("debugRuntimeClasspath"),
+        tasks.named("compileDebugKotlin").get().outputs.files,
+        tasks.named("compileDebugUnitTestKotlin").get().outputs.files,
+        android.bootClasspath
+    )
+    mainClass.set("maha.garage.VerifyRunnerKt")
 }

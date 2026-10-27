@@ -15,3 +15,7 @@ captures/
 *.class
 .kotlin/
 java_test_args.txt
+keystore/
+*.jks
+*.keystore
+KEYSTORE_INFO.txt

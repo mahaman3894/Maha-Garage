@@ -7,16 +7,19 @@ import java.time.temporal.ChronoUnit
 
 enum class InspectionStatusType(
     val title: String,
-    val badgeColor: Color,
+    val colorHex: Long,
     val description: String
 ) {
-    NEEDS_CHECK("공식 확인 필요", Color(0xFF8E8E93), "자동차등록증 또는 한국교통안전공단에서 공식 만료일을 확인해 주세요."),
-    WAITING("다음 검사 대기", Color(0xFF34C759), "아직 검사 가능 기간이 아닙니다."),
-    AVAILABLE("검사 가능", Color(0xFF30D158), "정기/종합 검사를 받을 수 있는 기간입니다."),
-    RECOMMEND_RESERVE("예약 권장", Color(0xFFFF9F0A), "검사 만료 기한이 30일 이내입니다. 검사 예약을 권장합니다."),
-    RETEST_DUE("재검사 대상", Color(0xFFFF9F0A), "정기/종합검사 부적합 판정 차량입니다. 재검사 기한 내에 수검하여야 합니다."),
-    URGENT("기한 임박", Color(0xFFFF453A), "검사 만료 기한이 3일 이내로 임박했습니다!"),
-    OVERDUE("검사기간 경과", Color(0xFFFF3B30), "검사 기간이 경과되었습니다. 지연 과태료가 발생할 수 있습니다.")
+    NEEDS_CHECK("공식 확인 필요", 0xFF8E8E93L, "자동차등록증 또는 한국교통안전공단에서 공식 만료일을 확인해 주세요."),
+    WAITING("다음 검사 대기", 0xFF34C759L, "아직 검사 가능 기간이 아닙니다."),
+    AVAILABLE("검사 가능", 0xFF30D158L, "정기/종합 검사를 받을 수 있는 기간입니다."),
+    RECOMMEND_RESERVE("예약 권장", 0xFFFF9F0AL, "검사 만료 기한이 30일 이내입니다. 검사 예약을 권장합니다."),
+    RETEST_DUE("재검사 대상", 0xFFFF9F0AL, "정기/종합검사 부적합 판정 차량입니다. 재검사 기한 내에 수검하여야 합니다."),
+    URGENT("기한 임박", 0xFFFF453AL, "검사 만료 기한이 3일 이내로 임박했습니다!"),
+    OVERDUE("검사기간 경과", 0xFFFF3B30L, "검사 기간이 경과되었습니다. 지연 과태료가 발생할 수 있습니다.");
+
+    val badgeColor: Color
+        get() = Color(colorHex)
 }
 
 data class InspectionEvaluation(

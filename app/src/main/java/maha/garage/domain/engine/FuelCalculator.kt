@@ -38,6 +38,12 @@ object FuelCalculator {
             return FuelCalculationResult(null, null, null)
         }
 
+        // 2-1. 직전 가득 주유와 이번 주유 사이에 누락(isMissedPrevious)이 있었다면 기준선이 단절된 것이므로 계산 불가
+        val hasMissedInBetween = history.subList(lastFullIndex + 1, history.size).any { it.isMissedPrevious }
+        if (hasMissedInBetween) {
+            return FuelCalculationResult(null, null, null)
+        }
+
         val lastFullRecord = history[lastFullIndex]
         val distance = current.odometer - lastFullRecord.odometer
         if (distance <= 0) {

@@ -1,5 +1,7 @@
 package maha.garage.ui.dashboard.component
 
+import maha.garage.ui.tutorial.*
+
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -58,6 +60,7 @@ fun ReceiptScannerDialog(
     onDataParsed: (ParsedReceiptData) -> Unit,
     onDismiss: () -> Unit
 ) {
+    if (LocalTutorial.current != null) { TutorialReceiptDemo(onDataParsed, onDismiss); return }
     val context = LocalContext.current
     var hasCameraPermission by remember {
         mutableStateOf(

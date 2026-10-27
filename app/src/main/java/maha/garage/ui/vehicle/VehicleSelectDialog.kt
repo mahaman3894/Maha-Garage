@@ -1,5 +1,7 @@
 package maha.garage.ui.vehicle
 
+import maha.garage.ui.tutorial.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,6 +40,8 @@ fun VehicleSelectDialog(
     var isLoading by remember { mutableStateOf(true) }
 
     var searchQuery by remember { mutableStateOf("") }
+    val tutorial = LocalTutorial.current
+    LaunchedEffect(tutorial?.index) { if (tutorial?.cue?.target == "catalog.first") searchQuery = "E클래스" }
     var selectedBrand by remember { mutableStateOf(if (initialBrand.isNullOrBlank()) "전체" else initialBrand) }
 
     val majorBrands = listOf("전체", "현대", "기아", "제네시스", "BMW", "벤츠", "아우디", "폭스바겐", "볼보", "테슬라", "포르쉐", "쉐보레", "KG모빌리티", "르노코리아", "토요타", "렉서스", "혼다", "미니")
@@ -128,7 +132,7 @@ fun VehicleSelectDialog(
                             }
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().tutorialTarget("catalog.search") { selectedBrand = "전체"; searchQuery = "E클래스" },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = GaragePrimaryLight,
@@ -218,6 +222,7 @@ fun VehicleSelectDialog(
                         items(filteredList, key = { it.id }) { item ->
                             VehicleCatalogItemRow(
                                 item = item,
+                                modifier = if (item.id == filteredList.firstOrNull()?.id) Modifier.tutorialTarget("catalog.first") { onSelectVehicle(item) } else Modifier,
                                 onClick = { onSelectVehicle(item) }
                             )
                         }
@@ -231,10 +236,11 @@ fun VehicleSelectDialog(
 @Composable
 private fun VehicleCatalogItemRow(
     item: VehicleCatalogItem,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = SurfaceVariantDark.copy(alpha = 0.7f)),

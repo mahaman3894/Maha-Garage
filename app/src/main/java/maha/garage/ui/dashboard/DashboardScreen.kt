@@ -1,5 +1,7 @@
 package maha.garage.ui.dashboard
 
+import maha.garage.ui.tutorial.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -47,8 +49,16 @@ fun DashboardScreen(
     val state by viewModel.uiState.collectAsState()
 
     var showAddFuelDialog by remember { mutableStateOf(false) }
+    val tutorial = LocalTutorial.current
     var showReceiptScanner by remember { mutableStateOf(false) }
     var currentReceiptData by remember { mutableStateOf<ParsedReceiptData?>(null) }
+    LaunchedEffect(tutorial?.index) {
+        if (tutorial != null) {
+            showReceiptScanner = tutorial.cue.target == "scanner.capture"
+            showAddFuelDialog = tutorial.cue.target in listOf("fuel.camera", "fuel.save")
+            if (tutorial.cue.target == "fuel.save") currentReceiptData = ParsedReceiptData(50.0,1700,85000,"예시 주유소")
+        }
+    }
     var recordToDelete by remember { mutableStateOf<FuelRecordEntity?>(null) }
     val vehicleRowState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -118,7 +128,9 @@ fun DashboardScreen(
                         shadowElevation = 2.dp,
                         modifier = Modifier.size(38.dp)
                     ) {
-                        IconButton(onClick = { showAddFuelDialog = true }) {
+                        val tutorialAction6 = tutorialAction6@ { showAddFuelDialog = true }
+IconButton(
+modifier = Modifier.tutorialTarget("fuel.add", tutorialAction6),onClick = tutorialAction6) {
                             Icon(
                                 imageVector = Icons.Default.Add,
                                 contentDescription = "주유 기록 추가",
@@ -263,6 +275,7 @@ fun DashboardScreen(
                     val car = vehicleWithStatus.car
 
                     item {
+                        Box(Modifier.tutorialTarget("fuel.summary")) {
                         MichaelStyleFuelSummaryCard(
                             recentEconomy = state.recentEconomy,
                             averageEconomy = state.averageEconomy,
@@ -272,6 +285,7 @@ fun DashboardScreen(
                             isPinned = state.isCurrentVehiclePinned,
                             onTogglePin = { viewModel.togglePinCurrentVehicle() }
                         )
+                        }
                     }
 
                     // 3. 스마트 주유 통계 카드

@@ -10,6 +10,12 @@ interface FuelRecordDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRecord(record: FuelRecordEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRecords(records: List<FuelRecordEntity>)
+
+    @Query("SELECT * FROM fuel_records")
+    fun getAllRecordsDirect(): List<FuelRecordEntity>
+
     @Query("SELECT * FROM fuel_records WHERE vehicleId = :vehicleId ORDER BY odometer ASC, refuelDate ASC")
     suspend fun getRecordsForVehicleAsc(vehicleId: String): List<FuelRecordEntity>
 
@@ -24,6 +30,12 @@ interface FuelRecordDao {
 
     @Query("SELECT * FROM fuel_records WHERE vehicleId = :vehicleId ORDER BY odometer DESC, refuelDate DESC LIMIT 1")
     suspend fun getLatestRecord(vehicleId: String): FuelRecordEntity?
+
+    @Update
+    suspend fun updateRecords(records: List<FuelRecordEntity>)
+
+    @Query("SELECT * FROM fuel_records WHERE id = :id")
+    suspend fun getRecordById(id: Long): FuelRecordEntity?
 
     @Delete
     suspend fun deleteRecord(record: FuelRecordEntity)

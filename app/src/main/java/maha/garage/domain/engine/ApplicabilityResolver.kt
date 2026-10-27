@@ -13,6 +13,11 @@ object ApplicabilityResolver {
      * 특정 차량에 해당 소모품 항목이 유효하게 적용 가능한지 판별합니다.
      */
     fun isItemApplicable(car: CarEntity, catalogItem: MaintenanceCatalogEntity): Boolean {
+        // 0. 관리 대상에서 제외된 소모품 배제 (워셔액, 로워암 부싱, 휠 얼라인먼트 - 타이어 섹션에서 관리)
+        if (catalogItem.itemCode in setOf("WASHER_FLUID", "SUSPENSION_BUSHING", "WHEEL_ALIGNMENT")) {
+            return false
+        }
+
         // 1. 순수 전기차(BEV)의 내연기관 전용 품목 배제 검증 (하이브리드는 엔진오일 등 내연기관 항목 필수 유지)
         if (car.powertrain == PowertrainType.BEV) {
             val iceOnlyCodes = setOf(
@@ -264,10 +269,10 @@ object ApplicabilityResolver {
                             intervalMonths = if (isSevere) 48 else 60
                         }
                         "COOLANT" -> {
-                            intervalKm = 40000
+                            intervalKm = if (isSevere) 40000 else 50000
                             intervalMonths = 24
-                            firstIntervalKm = if (isSevere) 40000 else if (isShop) 80000 else 100000
-                            firstIntervalMonths = if (isSevere) 24 else if (isShop) 48 else 60
+                            firstIntervalKm = if (isSevere) 100000 else if (isShop) 100000 else 200000
+                            firstIntervalMonths = if (isSevere) 60 else if (isShop) 60 else 120
                         }
                         "FUEL_FILTER" -> {
                             intervalKm = if (isSevere) 30000 else if (isShop) 30000 else 40000
@@ -330,12 +335,16 @@ object ApplicabilityResolver {
                     }
                 }
 
-                if (isSevere && intervalKm != null) {
-                    firstIntervalKm = firstIntervalKm?.coerceAtMost(intervalKm)
+                // 가혹 운행 조건(isSevere)인 경우, 가혹 최초 주기는 가혹 반복 주기(severeRepeat)를 초과할 수 없음
+                if (isSevere) {
+                    if (intervalKm != null && firstIntervalKm != null && firstIntervalKm > intervalKm) {
+                        firstIntervalKm = intervalKm
+                    }
+                    if (intervalMonths != null && firstIntervalMonths != null && firstIntervalMonths > intervalMonths) {
+                        firstIntervalMonths = intervalMonths
+                    }
                 }
-                if (isSevere && intervalMonths != null) {
-                    firstIntervalMonths = firstIntervalMonths?.coerceAtMost(intervalMonths)
-                }
+
 
                 val source = when (standard) {
                     "OFFICIAL" -> SourceType.VERIFIED_OEM

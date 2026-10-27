@@ -1,9 +1,14 @@
 package maha.garage.ui.vehicle
 
+import maha.garage.ui.tutorial.*
+
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,19 +21,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import maha.garage.data.local.entity.CarEntity
 import maha.garage.data.model.enums.DueStatus
-import maha.garage.domain.engine.TireSwapCalculator
+import maha.garage.domain.engine.*
 import maha.garage.domain.model.ItemEvaluation
 import maha.garage.domain.model.VehicleWithStatus
-import maha.garage.domain.engine.*
 import maha.garage.ui.components.*
 import maha.garage.ui.theme.*
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.ui.text.style.TextAlign
 import java.time.LocalDate
 
 /**
@@ -80,6 +83,15 @@ fun VehicleDetailScreen(
     var showInsuranceEditDialog by remember { mutableStateOf(false) }
     var showInspectionGuideDialog by remember { mutableStateOf(false) }
     var showEmergencyDialog by remember { mutableStateOf(false) }
+    val tutorial = LocalTutorial.current
+    val tutorialListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(tutorial?.index) {
+        if (tutorial != null) {
+            showEmergencyDialog = tutorial.cue.target.startsWith("emergency.")
+            selectedConsumableItemCode = if (tutorial.cue.target == "consumable.form") "ENGINE_OIL" else null
+            if (tutorial.cue.target == "detail.oil") tutorialListState.scrollToItem(2)
+        }
+    }
     var editingTireMileageMode by remember { mutableStateOf<String?>(null) }
     var savingTireMileage by remember { mutableStateOf(false) }
     var tireMileageError by remember { mutableStateOf<String?>(null) }
@@ -92,8 +104,10 @@ fun VehicleDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // 1. 긴급출동 플로팅 버튼 (정비 기록 추가 버튼 바로 위에 위치, 스크롤해도 최상단 유지)
-                ExtendedFloatingActionButton(
-                    onClick = { showEmergencyDialog = true },
+                val tutorialAction8 = tutorialAction8@ { showEmergencyDialog = true }
+ExtendedFloatingActionButton(
+                    onClick = tutorialAction8,
+                    modifier = Modifier.tutorialTarget("detail.emergency", tutorialAction8),
                     containerColor = SketchRed,
                     contentColor = Color.White,
                     shape = RoundedCornerShape(16.dp),
@@ -160,6 +174,7 @@ fun VehicleDetailScreen(
                 }
 
                 LazyColumn(
+                    state = tutorialListState,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 16.dp),
@@ -1859,17 +1874,25 @@ fun UnifiedConsumableCard(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
+                val isUrgent = cardData.status == DueStatus.OVERDUE || cardData.status == DueStatus.DUE_NOW || cardData.status == DueStatus.INSPECTION_DUE
+                val btnColor = if (isUrgent) StatusOverdue else ToolOrange
+                val btnText = if (isUrgent) "점검 · 교체 기록" else "교체 기록"
+                val btnIcon = if (isUrgent) Icons.Default.Build else Icons.Default.CheckCircleOutline
+
                 OutlinedButton(
                     onClick = onClick,
                     shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(vertical = 4.dp),
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White, contentColor = ToolOrange),
-                    border = BorderStroke(1.dp, ToolOrange.copy(alpha = 0.5f))
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (isUrgent) StatusOverdue.copy(alpha = 0.05f) else Color.White,
+                        contentColor = btnColor
+                    ),
+                    border = BorderStroke(1.dp, btnColor.copy(alpha = 0.6f))
                 ) {
-                    Icon(imageVector = Icons.Default.CheckCircleOutline, contentDescription = null, modifier = Modifier.size(14.dp), tint = ToolOrange)
+                    Icon(imageVector = btnIcon, contentDescription = null, modifier = Modifier.size(14.dp), tint = btnColor)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("교체 기록", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    Text(btnText, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -2048,12 +2071,31 @@ fun buildOrderedConsumablesList(evaluations: List<ItemEvaluation>, car: CarEntit
         result.add(createCardData("BRAKE_FLUID", "브레이크액 (DOT4)", eval))
     }
 
-    // 추가 적용 품목 (예: 디젤 연료필터, 트럭 에어드라이어 등)
+    // 추가 적용 품목 (예: 디젤 연료필터, 수분분리기, 트럭 에어드라이어, 섀시 그리스 등)
     evalMap["FUEL_FILTER"]?.let { eval ->
         result.add(createCardData("FUEL_FILTER", "연료필터", eval))
     }
+    evalMap["WATER_SEPARATOR"]?.let { eval ->
+        result.add(createCardData("WATER_SEPARATOR", "연료 수분분리기", eval))
+    }
     evalMap["AIR_DRYER_CARTRIDGE"]?.let { eval ->
         result.add(createCardData("AIR_DRYER_CARTRIDGE", "에어드라이어 카트리지", eval))
+    }
+    evalMap["CHASSIS_GREASE"]?.let { eval ->
+        result.add(createCardData("CHASSIS_GREASE", "섀시 그리스 주입", eval))
+    }
+
+    // 그 외 아직 목록에 추가되지 않은 모든 평가 항목 자동 포함 (제외 대상 품목 필터링)
+    val addedItemCodes = result.map { it.rawItemCode }.toSet()
+    val excludedItemCodes = setOf(
+        "OIL_FILTER", "BRAKE_PAD_FRONT", "BRAKE_PAD_REAR",
+        "TIRE_REPLACEMENT", "TIRE_ROTATION", "TIRE_SWAP",
+        "WASHER_FLUID", "WHEEL_ALIGNMENT", "SUSPENSION_BUSHING"
+    )
+    evaluations.forEach { eval ->
+        if (eval.itemCode !in addedItemCodes && eval.itemCode !in excludedItemCodes) {
+            result.add(createCardData(eval.itemCode, eval.displayName, eval))
+        }
     }
 
     return result
@@ -2098,13 +2140,45 @@ private fun createCardData(id: String, displayName: String, eval: ItemEvaluation
 }
 
 
-/** Compact status panel accompanying the vehicle illustration. */
+// 차량 부품 위치별 상태 점검도(좌측 일러스트)에 이미 표시된 품목 세트 (중복 방지 상수)
+private val SKETCH_PANEL_EXCLUDED_CODES = setOf(
+    "ENGINE_OIL",
+    "OIL_FILTER",
+    "ENGINE_AIR_FILTER",
+    "CABIN_FILTER",
+    "WIPER_BLADE",
+    "BATTERY_12V",
+    "TRANSMISSION_OIL",
+    "REDUCTION_GEAR_OIL",
+    "COOLANT",
+    "EV_COOLANT",
+    "BRAKE_PAD",
+    "BRAKE_PAD_FRONT",
+    "BRAKE_PAD_REAR",
+    "DIFFERENTIAL_OIL",
+    "TIRE",
+    "TIRE_REPLACEMENT",
+    "TIRE_ROTATION",
+    "TIRE_SWAP"
+)
+
+/** Compact status panel accompanying the vehicle illustration.
+ * 상태 점검도(스케치)에 표시된 항목(엔진오일, 흡기필터, 와이퍼, 배터리, 미션오일 등)을 제외하고,
+ * 점검도 외 핵심 소모품(점화코일, 점화플러그, 타이밍벨트, 워터펌프, 브레이크로터, 브레이크액, 연료필터 등)을 표시합니다.
+ */
 @Composable
 private fun ConsumableQuickPanel(
     consumables: List<ConsumableCardData>,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 점검도에 표시되지 못한 다른 소모품들만 필터링 (점화코일, 점화플러그, 타이밍벨트, 워터펌프, 브레이크로터, 브레이크액 등)
+    val unmappedConsumables = remember(consumables) {
+        consumables.filter { item ->
+            item.rawItemCode !in SKETCH_PANEL_EXCLUDED_CODES && item.id !in SKETCH_PANEL_EXCLUDED_CODES
+        }
+    }
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -2112,40 +2186,118 @@ private fun ConsumableQuickPanel(
         shadowElevation = 2.dp,
         border = androidx.compose.foundation.BorderStroke(1.dp, WarmLine)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text("소모품 교환주기", color = TextPrimaryDark, fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(8.dp))
-            // The full consumable grid remains below this at all screen sizes.
-            consumables.take(6).forEach { item ->
-                val dotColor = when (item.status) {
-                    DueStatus.OVERDUE, DueStatus.DUE_NOW -> StatusOverdue
-                    DueStatus.DUE_SOON -> StatusDueSoon
-                    DueStatus.NORMAL -> StatusNormal
-                    else -> StatusNeutral
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "소모품 교환주기",
+                        color = TextPrimaryDark,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        text = "점검도 외 주요 교체 부품",
+                        color = TextSecondaryDark,
+                        style = MaterialTheme.typography.labelSmall
+                    )
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth().clickable { onSelect(item.rawItemCode) }
-                        .padding(vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = GarageAccent.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, GarageAccent.copy(alpha = 0.3f))
                 ) {
-                    Surface(modifier = Modifier.size(9.dp), shape = androidx.compose.foundation.shape.CircleShape,
-                        color = dotColor) {}
-                    Spacer(Modifier.width(7.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.labelMedium, color = TextPrimaryDark)
-                        Text(if (item.isNeedsData) "교환 기록 없음" else item.remainingText ?: item.statusDescription,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.labelSmall, color = TextSecondaryDark)
-                    }
-                    Icon(Icons.Default.ChevronRight, contentDescription = "상세", tint = TextSecondaryDark,
-                        modifier = Modifier.size(15.dp))
+                    Text(
+                        text = "${unmappedConsumables.size}개 품목",
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = GarageAccent
+                    )
                 }
-                HorizontalDivider(color = BorderDark.copy(alpha = 0.6f), thickness = 0.5.dp)
             }
-            Text("아래 전체 소모품 목록에서 모든 항목 확인", color = TextSecondaryDark,
-                style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 8.dp))
+
+            Spacer(Modifier.height(10.dp))
+
+            if (unmappedConsumables.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "점검도 외 등록된 소모품이 없습니다.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = TextSecondaryDark
+                    )
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 380.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    unmappedConsumables.forEach { item ->
+                        val dotColor = when (item.status) {
+                            DueStatus.OVERDUE, DueStatus.DUE_NOW -> StatusOverdue
+                            DueStatus.DUE_SOON -> StatusDueSoon
+                            DueStatus.NORMAL -> StatusNormal
+                            else -> StatusNeutral
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { onSelect(item.rawItemCode) }
+                                .padding(vertical = 7.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(9.dp),
+                                shape = androidx.compose.foundation.shape.CircleShape,
+                                color = dotColor
+                            ) {}
+                            Spacer(Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.title,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = TextPrimaryDark,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = if (item.isNeedsData) "교환 기록 없음" else item.remainingText ?: item.statusDescription,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondaryDark
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = "상세",
+                                tint = TextSecondaryDark,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                        HorizontalDivider(color = BorderDark.copy(alpha = 0.35f), thickness = 0.5.dp)
+                    }
+                }
+            }
+
+            Text(
+                text = "터치 시 교체 기록 및 주기 설정 / 아래 전체 목록에서 확인 가능",
+                color = WarmGray,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = androidx.compose.ui.unit.TextUnit(9.5f, androidx.compose.ui.unit.TextUnitType.Sp)),
+                modifier = Modifier.padding(top = 8.dp)
+            )
         }
     }
 }

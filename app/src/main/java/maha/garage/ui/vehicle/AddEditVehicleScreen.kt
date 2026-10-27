@@ -1,5 +1,7 @@
 package maha.garage.ui.vehicle
 
+import maha.garage.ui.tutorial.*
+
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -55,7 +57,7 @@ import androidx.compose.ui.layout.ContentScale
 import android.widget.Toast
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddEditVehicleScreen(
     vehicleId: String? = null,
@@ -139,7 +141,7 @@ fun AddEditVehicleScreen(
     var inspectionType by remember { mutableStateOf("정기검사") }
     var inspectionStartDate by remember { mutableStateOf("") }
     var inspectionEndDate by remember { mutableStateOf("") }
-    var isUsedCar by remember { mutableStateOf(false) }
+    var isUsedCar by remember { mutableStateOf(true) }
     var insuranceCompany by remember { mutableStateOf("") }
     var insuranceStartDate by remember { mutableStateOf("") }
     var insuranceEndDate by remember { mutableStateOf("") }
@@ -148,6 +150,19 @@ fun AddEditVehicleScreen(
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showPlateSearchDialog by remember { mutableStateOf(false) }
+    val tutorial = LocalTutorial.current
+    LaunchedEffect(tutorial?.index) {
+        if (tutorial != null) {
+            currentMileageStr = "50000"
+            showVehicleSelectDialog = tutorial.cue.target.startsWith("catalog.")
+            showPlateSearchDialog = tutorial.cue.target.startsWith("plate.")
+            if (tutorial.cue.target == "vehicle.save") {
+                make = "현대"; modelName = "그랜저 하이브리드"; carNumber = "12가3456"
+                powertrain = PowertrainType.HEV_GASOLINE
+                firstRegistrationDate = "2023-04-10"
+            }
+        }
+    }
 
     // 신차 정기검사 기간 자동 산출 함수
     fun applyInitialInspectionCalculation(
@@ -227,7 +242,8 @@ fun AddEditVehicleScreen(
     Scaffold(
         floatingActionButton = {
             PlateLookupFloatingButton(
-                onClick = { showPlateSearchDialog = true }
+                onClick = { showPlateSearchDialog = true },
+                modifier = Modifier.tutorialTarget("vehicle.plate") { showPlateSearchDialog = true }
             )
         },
         topBar = {
@@ -255,36 +271,35 @@ fun AddEditVehicleScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Box(modifier = Modifier.padding(16.dp)) {
-                    Button(
-                        onClick = {
+                    val tutorialAction3 = tutorialAction3@ {
                             if (make.isBlank()) {
                                 errorMessage = "제조사를 입력하거나 선택해주세요."
-                                return@Button
+                                return@tutorialAction3
                             }
                             if (modelName.isBlank()) {
                                 errorMessage = "모델명을 입력해주세요."
-                                return@Button
+                                return@tutorialAction3
                             }
                             if (carNumber.isBlank()) {
                                 errorMessage = "차량번호(예: 12가 3456)를 입력해주세요."
-                                return@Button
+                                return@tutorialAction3
                             }
                             if (firstRegistrationDate.isNotBlank() && runCatching {
                                 java.time.LocalDate.parse(firstRegistrationDate) <= java.time.LocalDate.now()
                             }.getOrDefault(false).not()) {
                                 errorMessage = "최초 등록일은 YYYY-MM-DD 형식의 과거 또는 오늘 날짜로 입력해 주세요."
-                                return@Button
+                                return@tutorialAction3
                             }
                             val dateValues = listOf(inspectionStartDate, inspectionEndDate, insuranceStartDate, insuranceEndDate)
                             if (dateValues.any { it.isNotBlank() && maha.garage.domain.engine.RenewalDatePolicy.parse(it.trim()) == null }) {
                                 errorMessage = "검사·보험 날짜를 YYYY-MM-DD 형식으로 확인해 주세요."
-                                return@Button
+                                return@tutorialAction3
                             }
                             val insuranceStart = maha.garage.domain.engine.RenewalDatePolicy.parse(insuranceStartDate.trim())
                             val insuranceEnd = maha.garage.domain.engine.RenewalDatePolicy.parse(insuranceEndDate.trim())
                             if (insuranceStart != null && insuranceEnd != null && insuranceEnd < insuranceStart) {
                                 errorMessage = "보험 만기일은 가입일 이후여야 합니다."
-                                return@Button
+                                return@tutorialAction3
                             }
                             val modelYear = modelYearStr.toIntOrNull() ?: 2023
                             val currentMileage = currentMileageStr.toIntOrNull() ?: 0
@@ -295,7 +310,7 @@ fun AddEditVehicleScreen(
                             if (currentMileage < (existingCar?.currentMileage ?: 0) ||
                                 (engineHours != null && (!engineHours.isFinite() || engineHours < (existingCar?.engineHours ?: 0.0)))) {
                                 errorMessage = "누적 주행거리와 가동시간은 이전 값보다 작을 수 없습니다."
-                                return@Button
+                                return@tutorialAction3
                             }
                             val carToSave = existingCar?.copy(
                                 make = make.trim(),
@@ -380,13 +395,16 @@ fun AddEditVehicleScreen(
                                 updatedAt = System.currentTimeMillis()
                             )
 
-                            viewModel.saveVehicle(carToSave, isNewCar = !isUsedCar) {
+                            val effectiveNewCar = (!isUsedCar) || (currentMileage <= 1000)
+                            viewModel.saveVehicle(if (tutorial != null) carToSave.copy(id = TutorialFixtures.CAR_ID, insuranceCompany = "예시 보험사", insuranceEmergencyCall = "000-0000-0000") else carToSave, isNewCar = effectiveNewCar) {
                                 onNavigateBack()
                             }
-                        },
+                        }
+Button(
+                        onClick = tutorialAction3,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp),
+                            .height(52.dp).tutorialTarget("vehicle.save", tutorialAction3),
                         colors = ButtonDefaults.buttonColors(containerColor = GaragePrimaryLight),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -444,10 +462,10 @@ fun AddEditVehicleScreen(
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
                                 text = "1. 차량 기본 제원",
@@ -521,7 +539,8 @@ fun AddEditVehicleScreen(
                                 }
 
                                 AnimatedMaskCatalogButton(
-                                    onClick = { showVehicleSelectDialog = true }
+                                    onClick = { showVehicleSelectDialog = true },
+                                    modifier = Modifier.tutorialTarget("vehicle.catalog") { showVehicleSelectDialog = true }
                                 )
                             }
                         }
@@ -1293,6 +1312,23 @@ fun AddEditVehicleScreen(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(10.dp))
+                                    .clickable { isUsedCar = true },
+                                color = if (isUsedCar) GarageAccent.copy(alpha = 0.2f) else SurfaceVariantDark,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    width = if (isUsedCar) 1.5.dp else 0.5.dp,
+                                    color = if (isUsedCar) GarageAccent else BorderDark
+                                ),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Box(modifier = Modifier.padding(12.dp), contentAlignment = Alignment.Center) {
+                                    Text("중고차 구매 (기본)", fontWeight = FontWeight.Bold, color = if (isUsedCar) GarageAccent else TextSecondaryDark)
+                                }
+                            }
+
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
                                     .clickable {
                                         isUsedCar = false
                                         applyInitialInspectionCalculation()
@@ -1308,26 +1344,9 @@ fun AddEditVehicleScreen(
                                     Text("신차 출고", fontWeight = FontWeight.Bold, color = if (!isUsedCar) GaragePrimaryLight else TextSecondaryDark)
                                 }
                             }
-
-                            Surface(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .clickable { isUsedCar = true },
-                                color = if (isUsedCar) GarageAccent.copy(alpha = 0.2f) else SurfaceVariantDark,
-                                border = androidx.compose.foundation.BorderStroke(
-                                    width = if (isUsedCar) 1.5.dp else 0.5.dp,
-                                    color = if (isUsedCar) GarageAccent else BorderDark
-                                ),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Box(modifier = Modifier.padding(12.dp), contentAlignment = Alignment.Center) {
-                                    Text("중고차 구매", fontWeight = FontWeight.Bold, color = if (isUsedCar) GarageAccent else TextSecondaryDark)
-                                }
-                            }
                         }
 
-                        // 중고차 등록 시 공단 공식 안내 문구
+                        // 중고차 등록 시 공단 공식 안내 및 소모품 자동 초기화 안내
                         if (isUsedCar) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Surface(
@@ -1336,13 +1355,22 @@ fun AddEditVehicleScreen(
                                 border = androidx.compose.foundation.BorderStroke(1.dp, StatusDueSoon.copy(alpha = 0.4f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = StatusDueSoon, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = StatusDueSoon, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "중고차 등록 관리 기준 안내",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = StatusDueSoon
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "중고차는 구매일 기준으로 검사 주기가 다시 시작되지 않습니다. 자동차등록증 또는 한국교통안전공단에서 기존 검사 만료일을 확인해 주세요.",
+                                        text = "• 주행거리 1,000km 이하는 자동으로 신차 출고 기준(0km 신품 기산점)이 적용됩니다.\n• 5만km 이상 장주기 부품(타이밍벨트, 워터펌프, 미션오일, 부동액 등): 출고(0km)부터 주행된 것으로 자동 측정됩니다.\n• 1.6만~5만km 부품(브레이크 패드, 오일 등): 절반 주기 경과로 기본 간주됩니다.\n• 1.5만km 이하 부품(엔진오일, 에어컨필터 등): 정보없음 상태로 등록 대기됩니다.",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = StatusDueSoon
+                                        color = TextSecondaryDark
                                     )
                                 }
                             }

@@ -1,5 +1,7 @@
 package maha.garage.ui.dashboard.component
 
+import maha.garage.ui.tutorial.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -187,6 +189,7 @@ fun AddFuelRecordDialog(
                     if (onScanReceiptClick != null) {
                         CameraLensFab(
                             size = 40.dp,
+                            modifier = Modifier.tutorialTarget("fuel.camera") { onScanReceiptClick() },
                             onClick = onScanReceiptClick
                         )
                     }
@@ -440,7 +443,34 @@ fun AddFuelRecordDialog(
                 }
 
                 // 6. 실시간 예상 연비 피드백 박스
-                if (previewResult != null && previewResult.segmentEconomy != null) {
+                if (isMissedPrevious) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFFFFF7ED),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDBA74)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = Color(0xFFEA580C),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "직전 주유 누락: 이번 주유는 새 연비 측정 기준선으로 설정됩니다 (구간 연비 미계산)",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFC2410C)
+                            )
+                        }
+                    }
+                } else if (previewResult != null && previewResult.segmentEconomy != null) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Surface(
                         shape = RoundedCornerShape(10.dp),
@@ -490,19 +520,19 @@ fun AddFuelRecordDialog(
                         Text("취소")
                     }
 
-                    Button(
-                        onClick = {
+                    val tutorialAction7 = tutorialAction7@ {
                             val odo = odometerText.toIntOrNull() ?: 0
                             val amount = fuelAmountText.toDoubleOrNull() ?: 0.0
                             val unit = unitPriceText.toIntOrNull() ?: 0
                             val total = totalPriceText.toIntOrNull() ?: (amount * unit).toInt()
                             onConfirm(odo, amount, unit, total, isFull, isMissedPrevious, gasStationName)
-                        },
+                        }
+Button(
+                        onClick = tutorialAction7,
                         enabled = isValid,
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = ToolOrange),
-                        modifier = Modifier.weight(1f)
-                    ) {
+                        modifier = Modifier.weight(1f).tutorialTarget("fuel.save", tutorialAction7)) {
                         Text("저장", fontWeight = FontWeight.Bold)
                     }
                 }

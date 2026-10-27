@@ -1,5 +1,7 @@
 package maha.garage.ui.history
 
+import maha.garage.ui.tutorial.*
+
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -163,7 +165,7 @@ fun CarHistoryScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier
+                modifier = Modifier.tutorialTarget("history.records")
                     .fillMaxSize()
                     .padding(padding)
                     .padding(horizontal = 16.dp),
